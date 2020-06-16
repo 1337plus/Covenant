@@ -6,18 +6,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 ### Added
+- Added CreateDirectory task
+
+### Changed
+- Add SharpSploit.LateralMovement namespace to SharpShell command
+- Updated PowerShellRemoting tasks to show output
+- Update implants to use WellKnownSidType enum rather than string for non-english systems
+- Update all launchers to support non-http profiles
+
+### Fixed
+- Fixed order of Upload parameters
+- Fixed Brute compilation path for case-sensitive file systems
+- Fixed HttpPost issue on Linux servers
+- Fixed Listeners stop issue
+- Fixed Seatbelt command group suggestions
+- Fixed EditGruntTask for task with aliases, validationmessage issue
+- Fixed Task aliases to be able to be edited
+- Fixed InstallUtil launcher
+- Fixed PowerShellLauncher maxlength too short
+- Fixed BridgeListener null exception on creation
+- Fixed Dockerfile to use sdk for runtime
+- Fixed ordering of deserialized GruntTask Options
+
+## [v0.5] - 2020-06-04
+### Added
 - Added GetNetShare task
 - Added Keylogger task
+- Added Brute .NET Core implant
+- Added .NET Core tasks: shell, shellcmd, ls, cd, ps, assembly
+- Added GruntTask import/export ability
 
 ### Changed
 - Improved ComputerName parsing and output for Domain tasks
-- Made changes necessary for C3 integration, allowing outbound SMB grunts
+- Upgraded to .NET Core 3.1
+- Changed UI to use Blazor
+- Changed profiles to use .NET Core 3.1
+- Downloaded launchers filename set to implanttemplate name
+- Update Dockerfile for .NET Core 3.1
+- Moved GruntTasks to yaml files
+- Changed delay/jitter/killdate commands to not use 'Set'
 
 ### Fixed
 - Fixed missing http profiles on Ubuntu w/ workaround due to corefx issue
+- Made changes necessary for C3 integration, allowing outbound SMB grunts
+- Fixed missing http profiles on Ubuntu w/ workaround due to corefx issue
 - Fix GET /api/gruntcommand/{id} endpoint missing output
-- Fix [#122][issue-122] multiple connection addresses issue
-- Fix [#137][issue-137] grunt last checked-in field sorting issue on table
+- Fix #122 multiple connection addresses issue
+- Fix #137 grunt last checked-in field sorting issue on table
 
 ## [v0.4] - 2019-10-30
 ### Added
@@ -188,6 +223,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [v0.3.1]: https://github.com/cobbr/Covenant/compare/v0.3...v0.3.1
 [v0.3.2]: https://github.com/cobbr/Covenant/compare/v0.3.1...v0.3.2
 [v0.4]: https://github.com/cobbr/Covenant/compare/v0.3.2...v0.4
-
-[issue-122]: https://github.com/cobbr/Covenant/issues/122
-[issue-137]: https://github.com/cobbr/Covenant/issues/137
