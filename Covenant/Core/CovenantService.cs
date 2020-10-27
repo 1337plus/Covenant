@@ -37,7 +37,8 @@ namespace Covenant.Core
         Task<CovenantUserLoginResult> Login(CovenantUserLogin login);
         Task<CovenantUser> CreateUserVerify(ClaimsPrincipal principal, CovenantUserRegister register);
         Task<CovenantUser> CreateUser(CovenantUserLogin login);
-        Task<CovenantUser> EditUser(CovenantUser currentUser, CovenantUserLogin user);
+        Task<CovenantUser> EditUser(CovenantUser currentUser);
+        Task<CovenantUser> EditUserPassword(CovenantUser currentUser, CovenantUserLogin user);
         Task DeleteUser(string userId);
     }
 
@@ -55,6 +56,15 @@ namespace Covenant.Core
         Task<IdentityUserRole<string>> GetUserRole(string userId, string roleId);
         Task<IdentityUserRole<string>> CreateUserRole(string userId, string roleId);
         Task DeleteUserRole(string userId, string roleId);
+    }
+
+    public interface IThemeService
+    {
+        Task<IEnumerable<Theme>> GetThemes();
+        Task<Theme> GetTheme(int id);
+        Task<Theme> CreateTheme(Theme theme);
+        Task<Theme> EditTheme(Theme theme);
+        Task DeleteTheme(int id);
     }
 
     public interface IEventService
@@ -91,7 +101,7 @@ namespace Covenant.Core
     {
         Task<IEnumerable<Grunt>> GetGrunts();
         Task<Grunt> GetGrunt(int gruntId);
-        Task<Grunt> GetGruntByName(string name, StringComparison compare = StringComparison.CurrentCulture);
+        Task<Grunt> GetGruntByName(string name);
         Task<Grunt> GetGruntByGUID(string guid);
         Task<Grunt> GetGruntByOriginalServerGUID(string serverguid);
         Task<bool> IsGruntLost(Grunt g);
@@ -306,6 +316,10 @@ namespace Covenant.Core
         Task<BinaryLauncher> GenerateBinaryLauncher();
         Task<BinaryLauncher> GenerateBinaryHostedLauncher(HostedFile file);
         Task<BinaryLauncher> EditBinaryLauncher(BinaryLauncher launcher);
+        Task<ShellCodeLauncher> GetShellCodeLauncher();
+        Task<ShellCodeLauncher> GenerateShellCodeLauncher();
+        Task<ShellCodeLauncher> GenerateShellCodeHostedLauncher(HostedFile file);
+        Task<ShellCodeLauncher> EditShellCodeLauncher(ShellCodeLauncher launcher);
         Task<PowerShellLauncher> GetPowerShellLauncher();
         Task<PowerShellLauncher> GeneratePowerShellLauncher();
         Task<PowerShellLauncher> GeneratePowerShellHostedLauncher(HostedFile file);
@@ -340,7 +354,7 @@ namespace Covenant.Core
         Task<WscriptLauncher> EditWscriptLauncher(WscriptLauncher launcher);
     }
 
-    public interface ICovenantService : ICovenantUserService, IIdentityRoleService, IIdentityUserRoleService,
+    public interface ICovenantService : ICovenantUserService, IIdentityRoleService, IIdentityUserRoleService, IThemeService,
         IEventService, IImplantTemplateService, IGruntService, IGruntTaskService,
         IGruntCommandService, ICommandOutputService, IGruntTaskingService,
         ICredentialService, IIndicatorService, IListenerService, IProfileService, IHostedFileService, ILauncherService
@@ -349,7 +363,7 @@ namespace Covenant.Core
         void DisposeContext();
     }
 
-    public interface IRemoteCovenantService : ICovenantUserService, IIdentityRoleService, IIdentityUserRoleService,
+    public interface IRemoteCovenantService : ICovenantUserService, IIdentityRoleService, IIdentityUserRoleService, IThemeService,
         IEventService, IImplantTemplateService, IGruntService, IGruntTaskService,
         IGruntCommandService, ICommandOutputService, IGruntTaskingService,
         ICredentialService, IIndicatorService, IListenerService, IProfileService, IHostedFileService, ILauncherService
@@ -400,12 +414,16 @@ namespace Covenant.Core
         #region CovenantUser Actions
         public async Task<IEnumerable<CovenantUser>> GetUsers()
         {
-            return await _context.Users.ToListAsync();
+            return await _context.Users
+                .Include(U => U.Theme)
+                .ToListAsync();
         }
 
         public async Task<CovenantUser> GetUser(string userId)
         {
-            CovenantUser user = await _context.Users.FirstOrDefaultAsync(U => U.Id == userId);
+            CovenantUser user = await _context.Users
+                .Include(U => U.Theme)
+                .FirstOrDefaultAsync(U => U.Id == userId);
             if (user == null)
             {
                 throw new ControllerNotFoundException($"NotFound - CovenantUser with id: {userId}");
@@ -415,7 +433,9 @@ namespace Covenant.Core
 
         public async Task<CovenantUser> GetUserByUsername(string username)
         {
-            CovenantUser user = await _context.Users.FirstOrDefaultAsync(U => U.UserName == username);
+            CovenantUser user = await _context.Users
+                .Include(U => U.Theme)
+                .FirstOrDefaultAsync(U => U.UserName == username);
             if (user == null)
             {
                 throw new ControllerNotFoundException($"NotFound - CovenantUser with Username: {username}");
@@ -440,7 +460,9 @@ namespace Covenant.Core
             {
                 return new CovenantUserLoginResult { Success = false, CovenantToken = "" };
             }
-            CovenantUser user = await _context.Users.FirstOrDefaultAsync(U => U.UserName == login.UserName);
+            CovenantUser user = await _context.Users
+                .Include(U => U.Theme)
+                .FirstOrDefaultAsync(U => U.UserName == login.UserName);
             if (user == null)
             {
                 throw new ControllerNotFoundException($"NotFound - User with username: {login.UserName}");
@@ -458,7 +480,7 @@ namespace Covenant.Core
 
         public async Task<CovenantUser> CreateUserVerify(ClaimsPrincipal principal, CovenantUserRegister register)
         {
-            if (_userManager.Users.Any() && !_signInManager.IsSignedIn(principal))
+            if (_userManager.Users.Any() && !principal.Identity.IsAuthenticated)
             {
                 throw new ControllerUnauthorizedException($"Unauthorized - Must be signed in to register a new user.");
             }
@@ -494,7 +516,7 @@ namespace Covenant.Core
                 }
                 throw new ControllerBadRequestException(ErrorMessage);
             }
-            
+
             if (!_userManager.Users.Any())
             {
                 await _userManager.AddToRoleAsync(user, "Administrator");
@@ -511,7 +533,8 @@ namespace Covenant.Core
             Event userEvent = new Event
             {
                 Time = eventTime,
-                MessageHeader = "[" + eventTime + " UTC] User: " + savedUser.UserName + " with roles: " + savedRoles + " has been created!",
+                MessageHeader = "Created User",
+                MessageBody = "User: " + savedUser.UserName + " with roles: " + savedRoles + " has been created!",
                 Level = EventLevel.Info,
                 Context = "Users"
             };
@@ -521,21 +544,34 @@ namespace Covenant.Core
             return savedUser;
         }
 
-        public async Task<CovenantUser> EditUser(CovenantUser currentUser, CovenantUserLogin user)
+        public async Task<CovenantUser> EditUser(CovenantUser user)
+        {
+            CovenantUser matching_user = await _userManager.Users.FirstOrDefaultAsync(U => U.Id == user.Id);
+            if (matching_user == null)
+            {
+                throw new ControllerNotFoundException($"NotFound - CovenantUser with id: {user.Id}");
+            }
+            matching_user.ThemeId = user.ThemeId;
+            IdentityResult result = await _userManager.UpdateAsync(matching_user);
+            if (!result.Succeeded)
+            {
+                throw new ControllerBadRequestException($"BadRequest - Could not edit CovenantUser with id: {user.Id}");
+            }
+            // await _context.SaveChangesAsync();
+            await _notifier.NotifyEditCovenantUser(this, matching_user);
+            return matching_user;
+        }
+
+        public async Task<CovenantUser> EditUserPassword(CovenantUser currentUser, CovenantUserLogin user)
         {
             CovenantUser matching_user = await _userManager.Users.FirstOrDefaultAsync(U => U.UserName == user.UserName);
             if (matching_user == null)
             {
                 throw new ControllerNotFoundException($"NotFound - CovenantUser with username: {user.UserName}");
             }
-            var admins = from users in _context.Users
-                         join userroles in _context.UserRoles on users.Id equals userroles.UserId
-                         join roles in _context.Roles on userroles.RoleId equals roles.Id
-                         where roles.Name == "Administrator"
-                         select users.UserName;
-            if (currentUser.UserName != matching_user.UserName && !admins.Contains(currentUser.UserName))
+            if (currentUser.UserName != matching_user.UserName)
             {
-                throw new ControllerBadRequestException($"BadRequest - Current user: {currentUser.UserName} is not an Administrator and cannot change password of user: {user.Password}");
+                throw new ControllerBadRequestException($"BadRequest - Current user: {currentUser.UserName} cannot change password of user: {user.Password}");
             }
             matching_user.PasswordHash = _userManager.PasswordHasher.HashPassword(matching_user, user.Password);
             IdentityResult result = await _userManager.UpdateAsync(matching_user);
@@ -544,7 +580,7 @@ namespace Covenant.Core
                 throw new ControllerBadRequestException($"BadRequest - Could not set new password for CovenantUser with username: {user.UserName}");
             }
             // await _context.SaveChangesAsync();
-            // _notifier.OnEditCovenantUser(this, matching_user);
+            await _notifier.NotifyEditCovenantUser(this, matching_user);
             return matching_user;
         }
 
@@ -559,7 +595,7 @@ namespace Covenant.Core
             }
             _context.Users.Remove(user);
             await _context.SaveChangesAsync();
-            // _notifier.OnDeleteCovenantUser(this, user.Id);
+            await _notifier.NotifyDeleteCovenantUser(this, user.Id);
         }
 
         private IQueryable<CovenantUser> GetAdminUsers()
@@ -683,6 +719,78 @@ namespace Covenant.Core
         }
         #endregion
 
+        #region Theme Actions
+        public async Task<IEnumerable<Theme>> GetThemes()
+        {
+            return await _context.Themes.ToListAsync();
+        }
+
+        public async Task<Theme> GetTheme(int themeId)
+        {
+            Theme theme = await _context.Themes.FirstOrDefaultAsync(T => T.Id == themeId);
+            if (theme == null)
+            {
+                throw new ControllerNotFoundException($"NotFound - Theme with id: {themeId}");
+            }
+            return theme;
+        }
+
+        public async Task<Theme> CreateTheme(Theme theme)
+        {
+            await _context.Themes.AddAsync(theme);
+            await _context.SaveChangesAsync();
+            await _notifier.NotifyCreateTheme(this, theme);
+            return await this.GetTheme(theme.Id);
+        }
+
+        public async Task<Theme> EditTheme(Theme theme)
+        {
+            Theme matchingTheme = await this.GetTheme(theme.Id);
+            matchingTheme.Description = theme.Description;
+            matchingTheme.Name = theme.Name;
+
+            matchingTheme.BackgroundColor = theme.BackgroundColor;
+            matchingTheme.BackgroundTextColor = theme.BackgroundTextColor;
+
+            matchingTheme.PrimaryColor = theme.PrimaryColor;
+            matchingTheme.PrimaryTextColor = theme.PrimaryTextColor;
+            matchingTheme.PrimaryHighlightColor = theme.PrimaryHighlightColor;
+
+            matchingTheme.SecondaryColor = theme.SecondaryColor;
+            matchingTheme.SecondaryTextColor = theme.SecondaryTextColor;
+            matchingTheme.SecondaryHighlightColor = theme.SecondaryHighlightColor;
+
+            matchingTheme.TerminalColor = theme.TerminalColor;
+            matchingTheme.TerminalTextColor = theme.TerminalTextColor;
+            matchingTheme.TerminalHighlightColor = theme.TerminalHighlightColor;
+            matchingTheme.TerminalBorderColor = theme.TerminalBorderColor;
+
+            matchingTheme.NavbarColor = theme.NavbarColor;
+            matchingTheme.SidebarColor = theme.SidebarColor;
+
+            matchingTheme.InputColor = theme.InputColor;
+            matchingTheme.InputDisabledColor = theme.InputDisabledColor;
+            matchingTheme.InputTextColor = theme.InputTextColor;
+            matchingTheme.InputHighlightColor = theme.InputHighlightColor;
+
+            matchingTheme.TextLinksColor = theme.TextLinksColor;
+
+            matchingTheme.CodeMirrorTheme = theme.CodeMirrorTheme;
+            _context.Themes.Update(matchingTheme);
+            await _context.SaveChangesAsync();
+            await _notifier.NotifyEditTheme(this, matchingTheme);
+            return await this.GetTheme(theme.Id);
+        }
+
+        public async Task DeleteTheme(int id)
+        {
+            Theme theme = await this.GetTheme(id);
+            _context.Themes.Remove(theme);
+            await _notifier.NotifyDeleteTheme(this, id);
+            await _context.SaveChangesAsync();
+        }
+        #endregion
+
         #region Event Actions
         public async Task<IEnumerable<Event>> GetEvents()
         {
@@ -719,7 +827,6 @@ namespace Covenant.Core
 
         public async Task<Event> CreateEvent(Event anEvent)
         {
-            anEvent.Time = DateTime.UtcNow;
             await _context.Events.AddAsync(anEvent);
             await _context.SaveChangesAsync();
             await _notifier.NotifyCreateEvent(this, anEvent);
@@ -987,11 +1094,11 @@ namespace Covenant.Core
             return grunt;
         }
 
-        public async Task<Grunt> GetGruntByName(string name, StringComparison compare = StringComparison.CurrentCulture)
+        public async Task<Grunt> GetGruntByName(string name)
         {
             Grunt grunt = await _context.Grunts
                 .Include(G => G.ImplantTemplate)
-                .FirstOrDefaultAsync(g => g.Name.Equals(name, compare));
+                .FirstOrDefaultAsync(g => g.Name == name);
             if (grunt == null)
             {
                 throw new ControllerNotFoundException($"NotFound - Grunt with name: {name}");
@@ -1086,24 +1193,27 @@ namespace Covenant.Core
             {
                 return DateTime.UtcNow >= lostTime;
             }
+            if (DateTime.UtcNow < lostTime)
+            {
+                return false;
+            }
+
             Grunt sg = await _context.Grunts
                     .Where(GR => GR.Id == g.Id)
                     .Include(GR => GR.GruntCommands)
                     .ThenInclude(GC => GC.GruntTasking)
                     .FirstOrDefaultAsync();
-
-            if (DateTime.UtcNow >= lostTime &&
-                sg != null &&
-                sg.GruntCommands != null &&
-                sg.GruntCommands.Count > 0 &&
-                sg.GruntCommands.Any(
-                    GC => GC.GruntTasking != null &&
-                    (GC.GruntTasking.Status == GruntTaskingStatus.Uninitialized || GC.GruntTasking.Status == GruntTaskingStatus.Tasked)))
+            if (sg != null && sg.GruntCommands != null && sg.GruntCommands.Count > 0)
             {
-                lostTime = sg.GruntCommands.Where(GC => GC.GruntTasking != null &&
-                    (GC.GruntTasking.Status == GruntTaskingStatus.Uninitialized || GC.GruntTasking.Status == GruntTaskingStatus.Tasked)).Select(GC => GC.CommandTime).OrderBy(CT => CT).FirstOrDefault();
-                lostTime = lostTime.AddSeconds(g.Delay + (g.Delay * (g.JitterPercent / 100.0)) + Drift);
-                return DateTime.UtcNow >= lostTime;
+                GruntCommand lastCommand = sg.GruntCommands
+                    .Where(GC => GC.GruntTasking != null)
+                    .OrderByDescending(GC => GC.CommandTime)
+                    .FirstOrDefault();
+                if (lastCommand != null && (lastCommand.GruntTasking.Status == GruntTaskingStatus.Uninitialized || lastCommand.GruntTasking.Status == GruntTaskingStatus.Tasked))
+                {
+                    lostTime = lastCommand.CommandTime;
+                    return DateTime.UtcNow >= lastCommand.CommandTime.AddSeconds(g.Delay + (g.Delay * (g.JitterPercent / 100.0)) + Drift);
+                }
             }
             return false;
         }
@@ -1156,11 +1266,9 @@ namespace Covenant.Core
 
         public async Task<IEnumerable<Grunt>> CreateGrunts(params Grunt[] grunts)
         {
-            await _context.Grunts.AddRangeAsync(grunts);
-            await _context.SaveChangesAsync();
             foreach (Grunt g in grunts)
             {
-                await _notifier.NotifyCreateGrunt(this, g);
+                await this.CreateGrunt(g);
             }
             return grunts;
         }
@@ -1173,8 +1281,9 @@ namespace Covenant.Core
                 grunt.ActivationTime = DateTime.UtcNow;
                 Event gruntEvent = new Event
                 {
-                    Time = DateTime.UtcNow,
-                    MessageHeader = "[" + grunt.ActivationTime + " UTC] Grunt: " + grunt.Name + " from: " + grunt.Hostname + " has been activated!",
+                    Time = grunt.ActivationTime,
+                    MessageHeader = "Grunt Activated",
+                    MessageBody = "Grunt: " + grunt.Name + " from: " + grunt.Hostname + " has been activated!",
                     Level = EventLevel.Highlight,
                     Context = "*"
                 };
@@ -1604,6 +1713,13 @@ namespace Covenant.Core
                 commandTask = await this.GetGruntTaskByName(commandName, grunt.DotNetVersion);
                 if (commandTask.Options.Count == 1 && new List<string> { "Command", "ShellCommand", "PowerShellCommand", "Code" }.Contains(commandTask.Options[0].Name))
                 {
+                    string val = UserInput.Substring(UserInput.IndexOf(" ", StringComparison.Ordinal) + 1);
+                    if (val.StartsWith("/", StringComparison.Ordinal) && val.IndexOf(":", StringComparison.Ordinal) != -1)
+                    {
+                        int labelIndex = val.IndexOf(":", StringComparison.Ordinal);
+                        string label = val.Substring(1, labelIndex - 1);
+                        val = val.Substring(labelIndex + 1, val.Length - labelIndex - 1);
+                    }
                     parameters = new List<ParsedParameter>
                     {
                         new ParsedParameter
@@ -1612,7 +1728,7 @@ namespace Covenant.Core
                         },
                         new ParsedParameter
                         {
-                            Value = UserInput.Substring(UserInput.IndexOf(" ", StringComparison.Ordinal) + 1).Trim('"'),
+                            Value = val.TrimOnceSymmetric('"').Replace("\\\"", "\""),
                             Label = "", IsLabeled = false, Position = 0
                         }
                     };
@@ -1649,6 +1765,7 @@ namespace Covenant.Core
                     {
                         this.DisposeContext();
                         GruntCommand = await this.GetGruntCommand(GruntCommand.Id);
+                        GruntCommand.CommandOutput ??= await this.GetCommandOutput(GruntCommand.CommandOutputId);
                         GruntCommand.CommandOutput.Output = errors;
                         return await this.EditGruntCommand(GruntCommand);
                     }
@@ -1668,6 +1785,7 @@ namespace Covenant.Core
                 }
                 this.DisposeContext();
                 GruntCommand = await this.GetGruntCommand(GruntCommand.Id);
+                GruntCommand.CommandOutput ??= await this.GetCommandOutput(GruntCommand.CommandOutputId);
                 if (GruntCommand.CommandOutput.Output == "" && output != "")
                 {
                     GruntCommand.CommandOutput.Output = output;
@@ -1678,6 +1796,7 @@ namespace Covenant.Core
             {
                 this.DisposeContext();
                 GruntCommand = await this.GetGruntCommand(GruntCommand.Id);
+                GruntCommand.CommandOutput ??= await this.GetCommandOutput(GruntCommand.CommandOutputId);
                 GruntCommand.CommandOutput.Output = ConsoleWriter.PrintFormattedErrorLine($"{e.Message}{Environment.NewLine}{e.StackTrace}");
                 return await this.EditGruntCommand(GruntCommand);
             }
@@ -2032,10 +2151,10 @@ namespace Covenant.Core
 
         public async Task<GruntTask> GetGruntTaskByName(string name, Common.DotNetVersion version = Common.DotNetVersion.Net35)
         {
-            string word = name.ToLower();
+            string lower = name.ToLower();
 
             GruntTask task = _context.GruntTasks
-                .Where(T => T.Name.ToLower() == word)
+                .Where(T => T.Name.ToLower() == lower)
                 // .Where(T => T.CompatibleDotNetVersions.Contains(version))
                 .Include(T => T.Options)
                 .Include(T => T.Author)
@@ -2059,7 +2178,7 @@ namespace Covenant.Core
                     .Include("GruntTaskReferenceAssemblies.ReferenceAssembly")
                     .Include("GruntTaskEmbeddedResources.EmbeddedResource")
                     .AsEnumerable()
-                    .Where(T => T.Aliases.Contains(word))
+                    .Where(T => T.Aliases.Any(A => A.Equals(lower, StringComparison.CurrentCultureIgnoreCase)))
                     .Where(T => T.CompatibleDotNetVersions.Contains(version))
                     .FirstOrDefault();
                 if (task == null)
@@ -2283,7 +2402,6 @@ namespace Covenant.Core
                 .Include(GC => GC.User)
                 .Include(GC => GC.GruntTasking)
                     .ThenInclude(GT => GT.GruntTask)
-                .Include(GC => GC.CommandOutput)
                 .FirstOrDefaultAsync();
             if (command == null)
             {
@@ -2298,18 +2416,8 @@ namespace Covenant.Core
             await _context.SaveChangesAsync();
             command.Grunt = await this.GetGrunt(command.GruntId);
             command.User = await this.GetUser(command.UserId);
-            Event ev = new Event
-            {
-                Time = command.CommandTime,
-                MessageHeader = "[" + command.CommandTime + " UTC] Command assigned",
-                MessageBody = "(" + command.User.UserName + ") > " + command.Command,
-                Level = EventLevel.Info,
-                Context = command.Grunt.Name
-            };
-            await _context.Events.AddAsync(ev);
             await _context.SaveChangesAsync();
             await _notifier.NotifyCreateGruntCommand(this, command);
-            await _notifier.NotifyCreateEvent(this, ev);
             return command;
         }
 
@@ -2325,7 +2433,7 @@ namespace Covenant.Core
             GruntCommand updatingCommand = await this.GetGruntCommand(command.Id);
             updatingCommand.Command = command.Command;
             updatingCommand.CommandTime = command.CommandTime;
-            updatingCommand.CommandOutput = updatingCommand.CommandOutput ?? await this.GetCommandOutput(updatingCommand.CommandOutputId);
+            updatingCommand.CommandOutput ??= await this.GetCommandOutput(updatingCommand.CommandOutputId);
             if (updatingCommand.CommandOutput.Output != command.CommandOutput.Output)
             {
                 updatingCommand.CommandOutput.Output = command.CommandOutput.Output;
@@ -2336,7 +2444,7 @@ namespace Covenant.Core
             updatingCommand.GruntTaskingId = command.GruntTaskingId;
             if (updatingCommand.GruntTaskingId > 0)
             {
-                updatingCommand.GruntTasking = updatingCommand.GruntTasking ?? await this.GetGruntTasking(updatingCommand.GruntTaskingId ?? default);
+                updatingCommand.GruntTasking ??= await this.GetGruntTasking(updatingCommand.GruntTaskingId ?? default);
             }
             _context.GruntCommands.Update(updatingCommand);
             await _context.SaveChangesAsync();
@@ -2360,7 +2468,7 @@ namespace Covenant.Core
                 {
                     if (!task.Options[i].DisplayInCommand && parameters.Count > (i + 1))
                     {
-                        UserInput = UserInput.Replace($@"/{parameters[i + 1].Label}:""{parameters[i+1].Value}""", "");
+                        UserInput = UserInput.Replace($@"/{parameters[i + 1].Label}:""{parameters[i + 1].Value}""", "");
                     }
                 }
             }
@@ -2383,8 +2491,11 @@ namespace Covenant.Core
                 if (parameters[i].IsLabeled)
                 {
                     var option = task.Options.FirstOrDefault(O => O.Name.Equals(parameters[i].Label, StringComparison.OrdinalIgnoreCase));
-                    option.Value = parameters[i].Value;
-                    OptionAssignments[task.Options.IndexOf(option)] = true;
+                    if (option != null)
+                    {
+                        option.Value = parameters[i].Value;
+                        OptionAssignments[task.Options.IndexOf(option)] = true;
+                    }
                 }
                 else
                 {
@@ -2590,8 +2701,6 @@ namespace Covenant.Core
                 .Where(GT => GT.Id == taskingId)
                 .Include(GT => GT.Grunt)
                 .Include(GT => GT.GruntTask)
-                .Include(GT => GT.GruntCommand)
-                    .ThenInclude(GC => GC.CommandOutput)
                 .Include(GC => GC.GruntCommand)
                     .ThenInclude(GC => GC.User)
                 .FirstOrDefaultAsync();
@@ -2609,8 +2718,6 @@ namespace Covenant.Core
                 .Include(GT => GT.Grunt)
                 .Include(GT => GT.GruntTask)
                 .Include(GT => GT.GruntCommand)
-                    .ThenInclude(GC => GC.CommandOutput)
-                .Include(GT => GT.GruntCommand)
                     .ThenInclude(GC => GC.User)
                 .FirstOrDefaultAsync();
             if (tasking == null)
@@ -2626,6 +2733,7 @@ namespace Covenant.Core
             tasking.Grunt.Listener = await this.GetListener(tasking.Grunt.ListenerId);
             tasking.GruntTask = await this.GetGruntTask(tasking.GruntTaskId);
             tasking.GruntCommand = await this.GetGruntCommand(tasking.GruntCommandId);
+            tasking.GruntCommand.CommandOutput ??= await this.GetCommandOutput(tasking.GruntCommand.CommandOutputId);
             List<string> parameters = tasking.GruntTask.Options.OrderBy(O => O.Id).Select(O => string.IsNullOrEmpty(O.Value) ? O.DefaultValue : O.Value).ToList();
             if (tasking.GruntTask.Name.Equals("powershell", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(tasking.Grunt.PowerShellImport))
             {
@@ -2650,25 +2758,15 @@ namespace Covenant.Core
                 _context.Grunts.Update(tasking.Grunt);
                 tasking.GruntCommand.CommandOutput.Output = "PowerShell Imported";
 
-                Event ev = new Event
-                {
-                    Time = tasking.GruntCommand.CommandTime,
-                    MessageHeader = "[" + tasking.GruntCommand.CommandTime + " UTC] Command completed",
-                    MessageBody = "(" + tasking.GruntCommand.User.UserName + ") > " + tasking.GruntCommand.Command + Environment.NewLine + tasking.GruntCommand.CommandOutput,
-                    Level = EventLevel.Info,
-                    Context = tasking.Grunt.Name
-                };
-                await _context.Events.AddAsync(ev);
                 _context.GruntCommands.Update(tasking.GruntCommand);
                 await _context.SaveChangesAsync();
                 await _notifier.NotifyEditGrunt(this, tasking.Grunt);
                 await _notifier.NotifyEditGruntCommand(this, tasking.GruntCommand);
-                await _notifier.NotifyCreateEvent(this, ev);
                 tasking.Status = GruntTaskingStatus.Completed;
             }
             else if (tasking.GruntTask.Name.Equals("wmigrunt", StringComparison.OrdinalIgnoreCase))
             {
-                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.Equals(parameters[1], StringComparison.OrdinalIgnoreCase));
+                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.ToLower() == parameters[1].ToLower());
                 if (l == null || l.LauncherString == null || l.LauncherString.Trim() == "")
                 {
                     throw new ControllerNotFoundException($"NotFound - Launcher with name: {parameters[1]}");
@@ -2688,7 +2786,7 @@ namespace Covenant.Core
             }
             else if (tasking.GruntTask.Name.Equals("dcomgrunt", StringComparison.OrdinalIgnoreCase))
             {
-                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.Equals(parameters[1], StringComparison.OrdinalIgnoreCase));
+                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.ToLower() == parameters[1].ToLower());
                 if (l == null || l.LauncherString == null || l.LauncherString.Trim() == "")
                 {
                     throw new ControllerNotFoundException($"NotFound - Launcher with name: {parameters[1]}");
@@ -2712,7 +2810,7 @@ namespace Covenant.Core
             }
             else if (tasking.GruntTask.Name.Equals("powershellremotinggrunt", StringComparison.OrdinalIgnoreCase))
             {
-                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.Equals(parameters[1], StringComparison.OrdinalIgnoreCase));
+                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.ToLower() == parameters[1].ToLower());
                 if (l == null || l.LauncherString == null || l.LauncherString.Trim() == "")
                 {
                     throw new ControllerNotFoundException($"NotFound - Launcher with name: {parameters[1]}");
@@ -2730,7 +2828,7 @@ namespace Covenant.Core
             }
             else if (tasking.GruntTask.Name.Equals("bypassuacgrunt", StringComparison.OrdinalIgnoreCase))
             {
-                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.Equals(parameters[0], StringComparison.OrdinalIgnoreCase));
+                Launcher l = await _context.Launchers.FirstOrDefaultAsync(L => L.Name.ToLower() == parameters[0].ToLower());
                 if (l == null || l.LauncherString == null || l.LauncherString.Trim() == "")
                 {
                     throw new ControllerNotFoundException($"NotFound - Launcher with name: {parameters[0]}");
@@ -2786,6 +2884,11 @@ public static class Task
                 Grunt g = await this.GetGruntByName(parameters[0]);
                 parameters[0] = g.GUID;
             }
+            else if (tasking.GruntTask.Name.Equals("Connect", StringComparison.CurrentCultureIgnoreCase))
+            {
+                parameters[0] = parameters[0] == "localhost" ? tasking.Grunt.Hostname : parameters[0];
+                parameters[0] = parameters[0] == "127.0.0.1" ? tasking.Grunt.IPAddress : parameters[0];
+            }
             tasking.Parameters = parameters;
             try
             {
@@ -2795,19 +2898,9 @@ public static class Task
             {
                 tasking.GruntCommand.CommandOutput.Output = "CompilerException: " + e.Message;
                 tasking.Status = GruntTaskingStatus.Aborted;
-                Event ev = new Event
-                {
-                    Time = tasking.GruntCommand.CommandTime,
-                    MessageHeader = "[" + tasking.GruntCommand.CommandTime + " UTC] Command aborted",
-                    MessageBody = "(" + tasking.GruntCommand.User.UserName + ") > " + tasking.GruntCommand.Command + Environment.NewLine + tasking.GruntCommand.CommandOutput,
-                    Level = EventLevel.Info,
-                    Context = tasking.Grunt.Name
-                };
-                await _context.Events.AddAsync(ev);
                 _context.GruntCommands.Update(tasking.GruntCommand);
                 await _context.SaveChangesAsync();
                 await _notifier.NotifyEditGruntCommand(this, tasking.GruntCommand);
-                await _notifier.NotifyCreateEvent(this, ev);
             }
             await _context.GruntTaskings.AddAsync(tasking);
             await _context.SaveChangesAsync();
@@ -2847,7 +2940,7 @@ public static class Task
             GruntTaskingStatus newStatus = tasking.Status;
             GruntTaskingStatus originalStatus = updatingGruntTasking.Status;
             if ((originalStatus == GruntTaskingStatus.Tasked || originalStatus == GruntTaskingStatus.Progressed) &&
-                newStatus == GruntTaskingStatus.Completed)
+                (newStatus == GruntTaskingStatus.Progressed || newStatus == GruntTaskingStatus.Completed))
             {
                 if (tasking.Type == GruntTaskingType.Exit)
                 {
@@ -2879,59 +2972,57 @@ public static class Task
                 }
                 else if (tasking.Type == GruntTaskingType.Connect)
                 {
-                    if (originalStatus == GruntTaskingStatus.Tasked)
-                    {
-                        // Check if this Grunt was already connected
-                        string hostname = tasking.Parameters[0];
-                        string pipename = tasking.Parameters[1];
-                        Grunt previouslyConnectedGrunt = await _context.Grunts.FirstOrDefaultAsync(G =>
+                    // Check if this Grunt was already connected
+                    string hostname = tasking.Parameters[0];
+                    string pipename = tasking.Parameters[1];
+                    Grunt connectedGrunt = tasking.Parameters.Count >= 3 ? await this.GetGruntByGUID(tasking.Parameters[2]) :
+                        await _context.Grunts.Where(G =>
+                            G.Status != GruntStatus.Exited &&
                             G.ImplantTemplate.CommType == CommunicationType.SMB &&
-                            (G.IPAddress == hostname || G.Hostname == hostname) &&
-                            G.SMBPipeName == pipename &&
-                            (G.Status == GruntStatus.Disconnected || G.Status == GruntStatus.Lost || G.Status == GruntStatus.Active)
-                        );
-                        if (previouslyConnectedGrunt != null)
+                            ((G.IPAddress == hostname || G.Hostname == hostname) || (G.IPAddress == "" && G.Hostname == "")) &&
+                            G.SMBPipeName == pipename
+                        ).OrderByDescending(G => G.ActivationTime)
+                        .Include(G => G.ImplantTemplate)
+                        .FirstOrDefaultAsync();
+                    if (connectedGrunt == null)
+                    {
+                        throw new ControllerNotFoundException($"NotFound - Grunt staging from {hostname}:{pipename}");
+                    }
+                    else
+                    {
+                        Grunt connectedGruntParent = _context.Grunts.AsEnumerable().FirstOrDefault(G => G.Children.Contains(connectedGrunt.GUID));
+                        if (connectedGruntParent != null)
                         {
-                            if (previouslyConnectedGrunt.Status != GruntStatus.Disconnected)
-                            {
-                                // If already connected, disconnect to avoid cycles
-                                Grunt previouslyConnectedGruntPrevParent = await _context.Grunts.FirstOrDefaultAsync(G => G.Children.Contains(previouslyConnectedGrunt.GUID));
-                                if (previouslyConnectedGruntPrevParent != null)
-                                {
-                                    previouslyConnectedGruntPrevParent.RemoveChild(previouslyConnectedGrunt);
-                                    _context.Grunts.Update(previouslyConnectedGruntPrevParent);
-                                    await _notifier.NotifyEditGrunt(this, previouslyConnectedGruntPrevParent);
-                                }
-                            }
-
+                            connectedGruntParent.RemoveChild(connectedGrunt);
+                            _context.Grunts.Update(connectedGruntParent);
                             // Connect to tasked Grunt, no need to "Progress", as Grunt is already staged
-                            grunt.AddChild(previouslyConnectedGrunt);
-                            previouslyConnectedGrunt.Status = GruntStatus.Active;
-                            _context.Grunts.Update(previouslyConnectedGrunt);
-                            await _notifier.NotifyEditGrunt(this, previouslyConnectedGrunt);
+                            grunt.AddChild(connectedGrunt);
+                            connectedGrunt.Status = GruntStatus.Active;
+                            _context.Grunts.Update(connectedGrunt);
+                            await _notifier.NotifyEditGrunt(this, connectedGrunt);
                         }
                         else
                         {
-                            // If not already connected, the Grunt is going to stage, set status to Progressed
-                            newStatus = GruntTaskingStatus.Progressed;
+                            grunt.AddChild(connectedGrunt);
+                            if (connectedGrunt.Status == GruntStatus.Disconnected)
+                            {
+                                connectedGrunt.Status = GruntStatus.Active;
+                                _context.Grunts.Update(connectedGrunt);
+                                await _notifier.NotifyEditGrunt(this, connectedGrunt);
+                            }
                         }
-                    }
-                    else if (originalStatus == GruntTaskingStatus.Progressed)
-                    {
-                        // Connecting Grunt has staged, add as Child
-                        string hostname = tasking.Parameters[0];
-                        string pipename = tasking.Parameters[1];
-                        Grunt stagingGrunt = await _context.Grunts.FirstOrDefaultAsync(G =>
+                        await _context.Grunts.Where(G =>
+                            G.GUID != connectedGrunt.GUID && G.GUID != grunt.GUID &&
+                            G.Status != GruntStatus.Exited &&
                             G.ImplantTemplate.CommType == CommunicationType.SMB &&
                             ((G.IPAddress == hostname || G.Hostname == hostname) || (G.IPAddress == "" && G.Hostname == "")) &&
-                            G.SMBPipeName == pipename &&
-                            G.Status == GruntStatus.Stage0
-                        );
-                        if (stagingGrunt == null)
+                            G.SMBPipeName == pipename
+                        ).ForEachAsync(G =>
                         {
-                            throw new ControllerNotFoundException($"NotFound - Grunt staging from {hostname}:{pipename}");
-                        }
-                        grunt.AddChild(stagingGrunt);
+                            G.Status = GruntStatus.Exited;
+                            _context.Update(G);
+                            _notifier.NotifyEditGrunt(this, G).Wait();
+                        });
                     }
                 }
                 else if (tasking.Type == GruntTaskingType.Disconnect)
@@ -2941,6 +3032,8 @@ public static class Task
                     _context.Grunts.Update(disconnectFromGrunt);
                     await _notifier.NotifyEditGrunt(this, disconnectFromGrunt);
                     grunt.RemoveChild(disconnectFromGrunt);
+                    _context.Grunts.Update(grunt);
+                    await _notifier.NotifyEditGrunt(this, grunt);
                 }
             }
             Event ev = null;
@@ -2960,22 +3053,14 @@ public static class Task
                 }
                 catch (ControllerNotFoundException) { }
 
-                if (DownloadTask != null && tasking.GruntTaskId == DownloadTask.Id)
+                if (DownloadTask != null && tasking.GruntTaskId == DownloadTask.Id && newStatus == GruntTaskingStatus.Completed)
                 {
-                    ev = new Event
-                    {
-                        Time = updatingGruntTasking.CompletionTime,
-                        MessageHeader = "[" + updatingGruntTasking.CompletionTime + " UTC] " + tasking.GruntTask.Name + " " + verb,
-                        Level = EventLevel.Info,
-                        Context = grunt.Name
-                    };
-                    await _context.Events.AddAsync(ev);
-                    await _notifier.NotifyCreateEvent(this, ev);
                     string FileName = tasking.Parameters[0];
                     DownloadEvent downloadEvent = new DownloadEvent
                     {
                         Time = updatingGruntTasking.CompletionTime,
-                        MessageHeader = "Downloaded: " + FileName,
+                        MessageHeader = "Download Completed",
+                        MessageBody = "Downloaded: " + FileName,
                         Level = EventLevel.Info,
                         Context = grunt.Name,
                         FileName = FileName,
@@ -2986,22 +3071,14 @@ public static class Task
                     await _context.Events.AddAsync(downloadEvent);
                     await _notifier.NotifyCreateEvent(this, downloadEvent);
                 }
-                else if (ScreenshotTask != null && tasking.GruntTaskId == ScreenshotTask.Id)
+                else if (ScreenshotTask != null && tasking.GruntTaskId == ScreenshotTask.Id && newStatus == GruntTaskingStatus.Completed)
                 {
-                    ev = new Event
-                    {
-                        Time = updatingGruntTasking.CompletionTime,
-                        MessageHeader = "[" + updatingGruntTasking.CompletionTime + " UTC] " + tasking.GruntTask.Name + " " + verb,
-                        Level = EventLevel.Info,
-                        Context = grunt.Name
-                    };
-                    await _context.Events.AddAsync(ev);
-                    await _notifier.NotifyCreateEvent(this, ev);
                     string FileName = tasking.Name + ".png";
                     ScreenshotEvent screenshotEvent = new ScreenshotEvent
                     {
                         Time = updatingGruntTasking.CompletionTime,
-                        MessageHeader = "Downloaded: " + FileName,
+                        MessageHeader = "Download ScreenShot Completed",
+                        MessageBody = "Downloaded screenshot: " + FileName,
                         Level = EventLevel.Info,
                         Context = grunt.Name,
                         FileName = FileName,
@@ -3028,25 +3105,15 @@ public static class Task
                     _context.Entry(updatingGruntTasking.GruntCommand.CommandOutput).State = EntityState.Detached;
                     updatingGruntTasking.GruntCommand.CommandOutput.Output = tasking.GruntCommand.CommandOutput.Output;
                     await _notifier.NotifyEditCommandOutput(this, updatingGruntTasking.GruntCommand.CommandOutput);
-                    ev = new Event
-                    {
-                        Time = tasking.CompletionTime,
-                        MessageHeader = "[" + tasking.CompletionTime + " UTC] " + tasking.GruntTask.Name + " " + verb,
-                        MessageBody = "(" + tasking.GruntCommand.User.UserName + ") > " + tasking.GruntCommand.Command + Environment.NewLine + tasking.GruntCommand.CommandOutput.Output,
-                        Level = EventLevel.Info,
-                        Context = grunt.Name
-                    };
-                    await _context.Events.AddAsync(ev);
-                    await _notifier.NotifyCreateEvent(this, ev);
                 }
             }
             updatingGruntTasking.TaskingTime = tasking.TaskingTime;
             updatingGruntTasking.Status = newStatus;
-            _context.GruntTaskings.Update(updatingGruntTasking);
             _context.Grunts.Update(grunt);
+            _context.GruntTaskings.Update(updatingGruntTasking);
             await _context.SaveChangesAsync();
-            await _notifier.NotifyEditGruntTasking(this, updatingGruntTasking);
             await _notifier.NotifyEditGrunt(this, grunt);
+            await _notifier.NotifyEditGruntTasking(this, updatingGruntTasking);
             if (ev != null)
             {
                 tasking.GruntCommand = await _context.GruntCommands
@@ -3058,7 +3125,7 @@ public static class Task
                     .FirstOrDefaultAsync();
                 await _notifier.NotifyEditGruntCommand(this, tasking.GruntCommand);
             }
-            return updatingGruntTasking;
+            return await this.GetGruntTasking(updatingGruntTasking.Id);
         }
 
         public async Task DeleteGruntTasking(int taskingId)
@@ -3674,6 +3741,7 @@ public static class Task
             matchingListener.BindAddress = listener.BindAddress;
             matchingListener.BindPort = listener.BindPort;
             matchingListener.ConnectAddresses = listener.ConnectAddresses;
+            matchingListener.CovenantUrl = listener.CovenantUrl;
             matchingListener.CovenantToken = listener.CovenantToken;
 
             if (matchingListener.Status == ListenerStatus.Active && listener.Status == ListenerStatus.Stopped)
@@ -3681,14 +3749,15 @@ public static class Task
                 matchingListener.Stop(_cancellationTokens[matchingListener.Id]);
                 matchingListener.Status = listener.Status;
                 matchingListener.StartTime = DateTime.MinValue;
-                DateTime eventTime = DateTime.UtcNow;
                 Event listenerEvent = await this.CreateEvent(new Event
                 {
-                    Time = eventTime,
-                    MessageHeader = "[" + eventTime + " UTC] Stopped Listener: " + matchingListener.Name,
+                    Time = DateTime.UtcNow,
+                    MessageHeader = "Stopped Listener",
+                    MessageBody = "Stopped Listener: " + matchingListener.Name,
                     Level = EventLevel.Warning,
                     Context = "*"
                 });
+                await _context.SaveChangesAsync();
             }
             else if (matchingListener.Status != ListenerStatus.Active && listener.Status == ListenerStatus.Active)
             {
@@ -3708,10 +3777,12 @@ public static class Task
                 Event listenerEvent = await this.CreateEvent(new Event
                 {
                     Time = matchingListener.StartTime,
-                    MessageHeader = "[" + matchingListener.StartTime + " UTC] Started Listener: " + matchingListener.Name,
+                    MessageHeader = "Started Listener",
+                    MessageBody = "Started Listener: " + matchingListener.Name,
                     Level = EventLevel.Highlight,
                     Context = "*"
                 });
+                await _context.SaveChangesAsync();
             }
             _context.Listeners.Update(matchingListener);
             await _context.SaveChangesAsync();
@@ -3832,10 +3903,12 @@ public static class Task
             Event listenerEvent = await this.CreateEvent(new Event
             {
                 Time = listener.StartTime,
-                MessageHeader = "[" + listener.StartTime + " UTC] Started Listener: " + listener.Name,
+                MessageHeader = "Started Listener",
+                MessageBody = "Started Listener: " + listener.Name,
                 Level = EventLevel.Highlight,
                 Context = "*"
             });
+            await _context.SaveChangesAsync();
             return listener;
         }
 
@@ -3878,10 +3951,12 @@ public static class Task
             Event listenerEvent = await this.CreateEvent(new Event
             {
                 Time = listener.StartTime,
-                MessageHeader = "[" + listener.StartTime + " UTC] Started Listener: " + listener.Name,
+                MessageHeader = "Started Listener",
+                MessageBody = "Started Listener: " + listener.Name,
                 Level = EventLevel.Highlight,
                 Context = "*"
             });
+            await _context.SaveChangesAsync();
             return listener;
         }
 
@@ -3898,6 +3973,7 @@ public static class Task
             });
             IdentityRole listenerRole = await this.GetRoleByName("Listener");
             IdentityUserRole<string> userrole = await this.CreateUserRole(listenerUser.Id, listenerRole.Id);
+            listener.CovenantUrl = "https://localhost:" + _configuration["CovenantPort"];
             listener.CovenantToken = Utilities.GenerateJwtToken(
                 listenerUser.UserName, listenerUser.Id, new[] { listenerRole.Name },
                 _configuration["JwtKey"], _configuration["JwtIssuer"],
@@ -3935,6 +4011,7 @@ public static class Task
             });
             IdentityRole listenerRole = await _context.Roles.FirstOrDefaultAsync(R => R.Name == "Listener");
             IdentityUserRole<string> userrole = await this.CreateUserRole(listenerUser.Id, listenerRole.Id);
+            listener.CovenantUrl = "https://localhost:" + _configuration["CovenantPort"];
             listener.CovenantToken = Utilities.GenerateJwtToken(
                 listenerUser.UserName, listenerUser.Id, new[] { listenerRole.Name },
                 _configuration["JwtKey"], _configuration["JwtIssuer"],
@@ -3997,10 +4074,12 @@ public static class Task
                 Event listenerEvent = await this.CreateEvent(new Event
                 {
                     Time = eventTime,
-                    MessageHeader = "[" + eventTime + " UTC] Stopped Listener: " + matchingListener.Name + " at: " + matchingListener.Urls,
+                    MessageHeader = "Stopped Listener",
+                    MessageBody = "Stopped Listener: " + matchingListener.Name + " at: " + matchingListener.Urls,
                     Level = EventLevel.Warning,
                     Context = "*"
                 });
+                await _context.SaveChangesAsync();
             }
             else if (matchingListener.Status != ListenerStatus.Active && listener.Status == ListenerStatus.Active)
             {
@@ -4036,10 +4115,12 @@ public static class Task
                 Event listenerEvent = await this.CreateEvent(new Event
                 {
                     Time = eventTime,
-                    MessageHeader = "[" + eventTime + " UTC] Stopped Listener: " + matchingListener.Name + " at: " + matchingListener.ConnectAddresses,
+                    MessageHeader = "Stopped Listener",
+                    MessageBody = "Stopped Listener: " + matchingListener.Name + " at: " + matchingListener.ConnectAddresses,
                     Level = EventLevel.Warning,
                     Context = "*"
                 });
+                await _context.SaveChangesAsync();
             }
             else if (matchingListener.Status != ListenerStatus.Active && listener.Status == ListenerStatus.Active)
             {
@@ -4266,10 +4347,101 @@ public static class Task
             matchingLauncher.ConnectAttempts = launcher.ConnectAttempts;
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.LauncherString = launcher.LauncherString;
+            matchingLauncher.StagerCode = launcher.StagerCode;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
             return await this.GetBinaryLauncher();
+        }
+
+        public async Task<ShellCodeLauncher> GetShellCodeLauncher()
+        {
+            ShellCodeLauncher launcher = (ShellCodeLauncher)await _context.Launchers.FirstOrDefaultAsync(S => S.Type == LauncherType.ShellCode);
+            if (launcher == null)
+            {
+                throw new ControllerNotFoundException($"NotFound - ShellCodeLauncher");
+            }
+            return launcher;
+        }
+
+        public async Task<ShellCodeLauncher> GenerateShellCodeLauncher()
+        {
+            ShellCodeLauncher launcher = await this.GetShellCodeLauncher();
+            Listener listener = await this.GetListener(launcher.ListenerId);
+            ImplantTemplate template = await this.GetImplantTemplate(launcher.ImplantTemplateId);
+            Profile profile = await this.GetProfile(listener.ProfileId);
+
+            if (!template.CompatibleListenerTypes.Select(LT => LT.Id).Contains(listener.ListenerTypeId))
+            {
+                throw new ControllerBadRequestException($"BadRequest - ListenerType not compatible with chosen ImplantTemplate");
+            }
+
+            Grunt grunt = new Grunt
+            {
+                ListenerId = listener.Id,
+                Listener = listener,
+                ImplantTemplateId = template.Id,
+                ImplantTemplate = template,
+                SMBPipeName = launcher.SMBPipeName,
+                ValidateCert = launcher.ValidateCert,
+                UseCertPinning = launcher.UseCertPinning,
+                Delay = launcher.Delay,
+                JitterPercent = launcher.JitterPercent,
+                ConnectAttempts = launcher.ConnectAttempts,
+                KillDate = launcher.KillDate,
+                DotNetVersion = launcher.DotNetVersion,
+                RuntimeIdentifier = launcher.RuntimeIdentifier
+            };
+
+            await _context.Grunts.AddAsync(grunt);
+            await _context.SaveChangesAsync();
+            await _notifier.NotifyCreateGrunt(this, grunt);
+
+            launcher.GetLauncher(
+                this.GruntTemplateReplace(template.StagerCode, template, grunt, listener, profile),
+                CompileGruntCode(template.StagerCode, template, grunt, listener, profile, launcher),
+                grunt,
+                template
+            );
+            _context.Launchers.Update(launcher);
+            await _context.SaveChangesAsync();
+            // _notifier.OnEditLauncher(this, launcher);
+            return await this.GetShellCodeLauncher();
+        }
+
+        public async Task<ShellCodeLauncher> GenerateShellCodeHostedLauncher(HostedFile file)
+        {
+            ShellCodeLauncher launcher = await this.GetShellCodeLauncher();
+            Listener listener = await this.GetListener(launcher.ListenerId);
+            HostedFile savedFile = await this.GetHostedFile(file.Id);
+            string hostedLauncher = launcher.GetHostedLauncher(listener, savedFile);
+            _context.Launchers.Update(launcher);
+            await _context.SaveChangesAsync();
+            // _notifier.OnEditLauncher(this, launcher);
+            return await this.GetShellCodeLauncher();
+        }
+
+        public async Task<ShellCodeLauncher> EditShellCodeLauncher(ShellCodeLauncher launcher)
+        {
+            ShellCodeLauncher matchingLauncher = await this.GetShellCodeLauncher();
+            Listener listener = await this.GetListener(launcher.ListenerId);
+            matchingLauncher.ListenerId = listener.Id;
+            matchingLauncher.ImplantTemplateId = launcher.ImplantTemplateId;
+            matchingLauncher.DotNetVersion = launcher.DotNetVersion;
+            matchingLauncher.RuntimeIdentifier = launcher.RuntimeIdentifier;
+            matchingLauncher.SMBPipeName = launcher.SMBPipeName;
+            matchingLauncher.ValidateCert = launcher.ValidateCert;
+            matchingLauncher.UseCertPinning = launcher.UseCertPinning;
+            matchingLauncher.Delay = launcher.Delay;
+            matchingLauncher.JitterPercent = launcher.JitterPercent;
+            matchingLauncher.ConnectAttempts = launcher.ConnectAttempts;
+            matchingLauncher.KillDate = launcher.KillDate;
+            matchingLauncher.LauncherString = launcher.LauncherString;
+            matchingLauncher.StagerCode = launcher.StagerCode;
+            _context.Launchers.Update(matchingLauncher);
+            await _context.SaveChangesAsync();
+            // _notifier.OnEditLauncher(this, matchingLauncher);
+            return await this.GetShellCodeLauncher();
         }
 
         public async Task<PowerShellLauncher> GetPowerShellLauncher()
@@ -4349,6 +4521,10 @@ public static class Task
             matchingLauncher.ConnectAttempts = launcher.ConnectAttempts;
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.LauncherString = launcher.LauncherString;
+            matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.ParameterString = launcher.ParameterString;
+            matchingLauncher.PowerShellCode = launcher.PowerShellCode;
+            matchingLauncher.EncodedLauncherString = launcher.EncodedLauncherString;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
@@ -4432,6 +4608,10 @@ public static class Task
             matchingLauncher.ConnectAttempts = launcher.ConnectAttempts;
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.LauncherString = launcher.LauncherString;
+            matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.DiskCode = launcher.DiskCode;
+            matchingLauncher.TargetName = launcher.TargetName;
+            matchingLauncher.TaskName = launcher.TaskName;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
@@ -4601,8 +4781,10 @@ public static class Task
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
             matchingLauncher.LauncherString = launcher.LauncherString;
-            matchingLauncher.DiskCode = launcher.DiskCode;
             matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.DiskCode = launcher.DiskCode;
+            matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
+            matchingLauncher.ProgId = launcher.ProgId;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
@@ -4689,8 +4871,12 @@ public static class Task
             matchingLauncher.DllName = launcher.DllName;
             matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
             matchingLauncher.LauncherString = launcher.LauncherString;
-            matchingLauncher.DiskCode = launcher.DiskCode;
             matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.DiskCode = launcher.DiskCode;
+            matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
+            matchingLauncher.ProgId = launcher.ProgId;
+            matchingLauncher.ParameterString = launcher.ParameterString;
+            matchingLauncher.DllName = launcher.DllName;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
@@ -4775,8 +4961,10 @@ public static class Task
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
             matchingLauncher.LauncherString = launcher.LauncherString;
-            matchingLauncher.DiskCode = launcher.DiskCode;
             matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.DiskCode = launcher.DiskCode;
+            matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
+            matchingLauncher.ProgId = launcher.ProgId;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
@@ -4861,8 +5049,10 @@ public static class Task
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
             matchingLauncher.LauncherString = launcher.LauncherString;
-            matchingLauncher.DiskCode = launcher.DiskCode;
             matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.DiskCode = launcher.DiskCode;
+            matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
+            matchingLauncher.ProgId = launcher.ProgId;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);
@@ -4947,8 +5137,10 @@ public static class Task
             matchingLauncher.KillDate = launcher.KillDate;
             matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
             matchingLauncher.LauncherString = launcher.LauncherString;
-            matchingLauncher.DiskCode = launcher.DiskCode;
             matchingLauncher.StagerCode = launcher.StagerCode;
+            matchingLauncher.DiskCode = launcher.DiskCode;
+            matchingLauncher.ScriptLanguage = launcher.ScriptLanguage;
+            matchingLauncher.ProgId = launcher.ProgId;
             _context.Launchers.Update(matchingLauncher);
             await _context.SaveChangesAsync();
             // _notifier.OnEditLauncher(this, matchingLauncher);

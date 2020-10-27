@@ -5,14 +5,62 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+###
+- Added ability to specify custom admin port number
+
+### Changed
+- Disallow Administrators from changing other user's passwords
+- Restrict non-admin users from visiting other user's profile in UI
+- Updated ShellCode task to use file upload of raw binary
+- Updated streaming tasks to autoflush the console
+- Updated Keylogger to handle VK_PACKET virtual keys
+
+### Fixed
+- Fix edit roles for CovenantUser UI bug
+- Fix profile bug when HttpGetResponse differs from HttpPostResponse
+- Fix TaskKill display bug
+- Fix token impersonation issues
+- Fix streaming output to capture output after Delay time elapsed
+- Fix streaming output does not capture exceptions issue
+- Fix Keylogger task Delegate gets garbage collected
+- Fix ImplantTemplate becomes null on GruntTable
+- Fix P2P routing when disconnecting/reconnecting to same Grunt repeatedly
+- Fixed and improved P2P stability for GruntSMB
+- Fix streaming output immediate write for push implants (SMB/Bridge)
+- Fix streaming output leftover buffer remaining output
+- Fix Download Task adding extra byte to files
+- Fix Download task exception on unexpected output
+
+## [v0.6] - 2020-08-04
 ### Added
 - Added CreateDirectory task
+- Add SharpSC submodule, ReferenceSourceLibrary, and GruntTask
+- Added CreateProcessWithToken task
+- Added aliases for Shell tasks
+- Added ShellCodeLauncher using Donut
+- Added Copy command
+- Added missing Keylogger task
+- Added streaming task output
+- Added Download/Upload .NET Core Tasks
+- Added ReadTextFile,CreateDirectory,Delete .NET Core Tasks
+- Added UI Themes, new Heathen Mode theme
+- Added a TabbedTerminal view to GruntIndex component
+- Added message that Covenant has started
 
 ### Changed
 - Add SharpSploit.LateralMovement namespace to SharpShell command
 - Updated PowerShellRemoting tasks to show output
 - Update implants to use WellKnownSidType enum rather than string for non-english systems
 - Update all launchers to support non-http profiles
+- Changed Shell tasks to use CreateProcess to get output
+- Updated SharpSploit, Rubeus, Seatbelt ReferenceSourceLibaries to latest versions
+- Simplified compilation optimization to use HashSet
+- Limited compilation optimization for SharpSC
+- Updated Seatbelt to latest version
+- Updated SharpSploit to latest version, PowerShell task should include verbose/error output
+- Changed GruntTask export to exclude GruntTaskOption value property
+- Updated codemirror, added night theme for codemirror
+- Removed Covenant certificate hash message
 
 ### Fixed
 - Fixed order of Upload parameters
@@ -27,6 +75,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed BridgeListener null exception on creation
 - Fixed Dockerfile to use sdk for runtime
 - Fixed ordering of deserialized GruntTask Options
+- Fixed Assembly tasks to do command-line style parsing
+- Updated YAML task file code options to use literal strings, may have been causing some problems
+- Fixed parameter parsing bug when multiple trailing double-quotes
+- Fixed command parameter parsing bug when multiple trailing double-quotes
+- Fixed command parameter parsing bug when labeled parameter
+- Fixed CovenantUser default properties set to null, not following OpenApi spec
+- Fixed task aliases use incorrect case comparisons
+- Fixed LauncherForm exception when no active listeners
+- Fixed missing ReferenceAssemblies for SharpSploit
+- Fixed WMICommand/WMIGrunt output format
+- Fixed ConnectAttempts bug
+- Fixed BridgeListener ArgumentOutOfRangeException
+- Fix/tweak Connect/Disconnect tasks
+- Fixed JwtKey issue
+- Fixed ImplantTemplateForm options resetting issue
+- Fixed terminal typeahead issues
+- Fixed HttpProfile editing issue
+- Fixed POST /api/users API endpoint authentication issue
+- Fixed profiles using Cookie header
+- Fixed profile using curly brace character
+- Fix create/edit for ReferenceSourceLibraries,ReferenceAssemblies,EmbeddedResources
+- Fix launcher commands (i.e. BypassUacGrunt, WMIGrunt, PowerShellRemotingGrunt)
+- Fix Launcher properties not being applied during generation
+- Fixed Graph with BridgeListener issue
 
 ## [v0.5] - 2020-06-04
 ### Added
@@ -223,3 +295,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [v0.3.1]: https://github.com/cobbr/Covenant/compare/v0.3...v0.3.1
 [v0.3.2]: https://github.com/cobbr/Covenant/compare/v0.3.1...v0.3.2
 [v0.4]: https://github.com/cobbr/Covenant/compare/v0.3.2...v0.4
+[v0.5]: https://github.com/cobbr/Covenant/compare/v0.4...v0.5
+[v0.6]: https://github.com/cobbr/Covenant/compare/v0.5...v0.6

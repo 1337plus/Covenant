@@ -10,9 +10,11 @@
   CompatibleDotNetVersions:
   - Net35
   - Net40
-  Code: >
+  Code: |
     using System;
+    using System.Collections.Generic;
 
+    using SharpSploit.Generic;
     using SharpSploit.LateralMovement;
 
     public static class Task
@@ -21,13 +23,14 @@
         {
             try
             {
-                if (WMI.WMIExecute(ComputerName, Command, Username, Password))
+                WMI.WmiExecuteResult result = WMI.WMIExecute(ComputerName, Command, Username, Password);
+                if (result != null)
                 {
-                    return "WMI execution successful. Executed: \"" + Command + "\" on: " + ComputerName;
+                    return new SharpSploitResultList<WMI.WmiExecuteResult> { WMI.WMIExecute(ComputerName, Command, Username, Password) }.ToString();
                 }
                 else
                 {
-                    return "WMI execution failed.";
+                    return "WMI Execution Failed";
                 }
             }
             catch (Exception e) { return e.GetType().FullName + ": " + e.Message + Environment.NewLine + e.StackTrace; }
@@ -72,7 +75,7 @@
   ReferenceSourceLibraries:
   - Name: SharpSploit
     Description: SharpSploit is a library for C# post-exploitation modules.
-    Location: SharpSploit\
+    Location: SharpSploit\SharpSploit\
     Language: CSharp
     CompatibleDotNetVersions: &o0
     - Net35
@@ -135,9 +138,11 @@
   CompatibleDotNetVersions:
   - Net35
   - Net40
-  Code: >
+  Code: |
     using System;
+    using System.Collections.Generic;
 
+    using SharpSploit.Generic;
     using SharpSploit.LateralMovement;
 
     public static class Task
@@ -146,13 +151,14 @@
         {
             try
             {
-                if (WMI.WMIExecute(ComputerName, Command, Username, Password))
+                WMI.WmiExecuteResult result = WMI.WMIExecute(ComputerName, Command, Username, Password);
+                if (result != null)
                 {
-                    return "WMI execution successful. Executed: \"" + Command + "\" on: " + ComputerName;
+                    return new SharpSploitResultList<WMI.WmiExecuteResult> { WMI.WMIExecute(ComputerName, Command, Username, Password) }.ToString();
                 }
                 else
                 {
-                    return "WMI execution failed.";
+                    return "WMI Execution Failed";
                 }
             }
             catch (Exception e) { return e.GetType().FullName + ": " + e.Message + Environment.NewLine + e.StackTrace; }
@@ -197,7 +203,7 @@
   ReferenceSourceLibraries:
   - Name: SharpSploit
     Description: SharpSploit is a library for C# post-exploitation modules.
-    Location: SharpSploit\
+    Location: SharpSploit\SharpSploit\
     Language: CSharp
     CompatibleDotNetVersions: *o0
     ReferenceAssemblies:
@@ -258,7 +264,7 @@
   CompatibleDotNetVersions:
   - Net35
   - Net40
-  Code: >
+  Code: |
     using System;
 
     using SharpSploit.LateralMovement;
@@ -321,7 +327,7 @@
   ReferenceSourceLibraries:
   - Name: SharpSploit
     Description: SharpSploit is a library for C# post-exploitation modules.
-    Location: SharpSploit\
+    Location: SharpSploit\SharpSploit\
     Language: CSharp
     CompatibleDotNetVersions: *o0
     ReferenceAssemblies:
@@ -382,7 +388,7 @@
   CompatibleDotNetVersions:
   - Net35
   - Net40
-  Code: >
+  Code: |
     using System;
 
     using SharpSploit.LateralMovement;
@@ -445,7 +451,7 @@
   ReferenceSourceLibraries:
   - Name: SharpSploit
     Description: SharpSploit is a library for C# post-exploitation modules.
-    Location: SharpSploit\
+    Location: SharpSploit\SharpSploit\
     Language: CSharp
     CompatibleDotNetVersions: *o0
     ReferenceAssemblies:
@@ -506,7 +512,7 @@
   CompatibleDotNetVersions:
   - Net35
   - Net40
-  Code: >
+  Code: |
     using System;
 
     using SharpSploit.LateralMovement;
@@ -566,7 +572,7 @@
   ReferenceSourceLibraries:
   - Name: SharpSploit
     Description: SharpSploit is a library for C# post-exploitation modules.
-    Location: SharpSploit\
+    Location: SharpSploit\SharpSploit\
     Language: CSharp
     CompatibleDotNetVersions: *o0
     ReferenceAssemblies:
@@ -627,7 +633,7 @@
   CompatibleDotNetVersions:
   - Net35
   - Net40
-  Code: >
+  Code: |
     using System;
 
     using SharpSploit.LateralMovement;
@@ -703,7 +709,7 @@
   ReferenceSourceLibraries:
   - Name: SharpSploit
     Description: SharpSploit is a library for C# post-exploitation modules.
-    Location: SharpSploit\
+    Location: SharpSploit\SharpSploit\
     Language: CSharp
     CompatibleDotNetVersions: *o0
     ReferenceAssemblies:
