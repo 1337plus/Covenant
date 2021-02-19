@@ -1,0 +1,66 @@
+﻿@page "/grunttask/edit/{GruntTaskId:int}"
+@attribute [Authorize(Roles = "User, Administrator")]
+@inherits OwningComponentBase<ICovenantService>
+
+@using Microsoft.JSInterop
+@using Covenant.Core
+@using Covenant.Models.Grunts
+@inject IJSRuntime IJSRuntime
+@inject NavigationManager NavigationManager
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap pb-2 mb-3">
+    <h1 class="h2">GruntTask: <span class="primary-color">@GruntTask.Name</span></h1>
+</div>
+
+<GruntTaskForm GruntTask="GruntTask" OnSubmit="OnEdit">
+    <button type="submit" class="btn btn-primary">
+        <span class="fe fe-edit"></span>
+        Edit
+    </button>
+    <button type="button" @onclick="OnExport" class="btn btn-secondary">
+        <span class="fe fe-share"></span>
+        Export
+    </button>
+    @if (!string.IsNullOrEmpty(this.ErrorMessage))
+    {
+        <div class="text-danger">@ErrorMessage</div>
+    }
+</GruntTaskForm>
+
+@code {
+    [Parameter]
+    public int GruntTaskId { get; set; }
+
+    [Parameter]
+    public GruntTask GruntTask { get; set; }
+
+    private string ErrorMessage { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        this.GruntTask = this.GruntTask ?? await Service.GetGruntTask(this.GruntTaskId);
+    }
+
+    private async Task OnEdit(GruntTask task)
+    {
+        try
+        {
+            await Service.EditGruntTask(task);
+            NavigationManager.NavigateTo("/grunttask");
+        }
+        catch (Exception e) when (e is ControllerNotFoundException || e is ControllerBadRequestException || e is ControllerUnauthorizedException)
+        {
+            this.ErrorMessage = e.Message;
+        }
+    }
+
+    private async Task OnExport()
+    {
+        await IJSRuntime.InvokeAsync<string>(
+            "DownloadFile",
+            this.GruntTask.Name + ".yaml",
+            Common.ContentTypeMappings[".yaml"],
+            Convert.ToBase64String(Common.CovenantEncoding.GetBytes(new List<GruntTask> { this.GruntTask }.ToYaml()))
+        );
+    }
+}

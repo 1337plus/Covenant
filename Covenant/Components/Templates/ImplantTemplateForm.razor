@@ -1,0 +1,264 @@
+﻿@inherits OwningComponentBase<ICovenantService>
+
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Forms
+@using Covenant.Core
+@using Covenant.Models.Covenant
+@using Covenant.Models.Grunts
+@using Covenant.Models.Listeners
+@inject IJSRuntime IJSRuntime
+
+<EditForm Model="ImplantTemplate" OnValidSubmit="(e => this.OnSubmit.InvokeAsync(this.ImplantTemplate))">
+    <DataAnnotationsValidator />
+    <div class="form-row">
+        <div class="form-group col-md-4">
+            <label for="Name">Name</label>
+            <input id="Name" name="Name" @bind="ImplantTemplate.Name" class="form-control">
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.Name" /></div>
+        </div>
+        <div class="form-group col-md-8">
+            <label for="Description">Description</label>
+            <input id="Description" name="Description" @bind="ImplantTemplate.Description" class="form-control">
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.Description" /></div>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label for="Language">Language</label><br />
+            <select id="Language" name="Language" @bind="ImplantTemplate.Language" class="selectpicker show-menu-arrow" data-dropup-auto="false" data-width="auto">
+                @foreach (var n in Enum.GetNames(typeof(ImplantLanguage)))
+                {
+                    <option value="@(((Enum)typeof(ImplantLanguage).GetField(n).GetValue(null)).ToString("d"))">@n</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.Language" /></div>
+        </div>
+        <div class="form-group col-md-3">
+            <label for="CommType">CommType</label><br />
+            <select id="CommType" name="CommType" @bind="ImplantTemplate.CommType" class="selectpicker show-menu-arrow" data-dropup-auto="false" data-width="auto">
+                @foreach (var n in Enum.GetNames(typeof(CommunicationType)))
+                {
+                    <option value="@(((Enum)typeof(CommunicationType).GetField(n).GetValue(null)).ToString("d"))">@n</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.CommType" /></div>
+        </div>
+        <div class="form-group col-md-3">
+            <label for="ImplantDirection">ImplantDirection</label><br />
+            <select id="ImplantDirection" name="ImplantDirection" @bind="ImplantTemplate.ImplantDirection" class="selectpicker show-menu-arrow" data-dropup-auto="false" data-width="auto">
+                @foreach (var n in Enum.GetNames(typeof(ImplantDirection)))
+                {
+                    <option value="@(((Enum)typeof(ImplantDirection).GetField(n).GetValue(null)).ToString("d"))">@n</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.ImplantDirection" /></div>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label for="CompatibleListenerTypes">CompatibleListenerTypes</label><br />
+            <select id="CompatibleListenerTypes" name="CompatibleListenerTypes" @onchange="OnChangeCompatibleListenerTypes" class="selectpicker show-menu-arrow" multiple data-dropup-auto="false" data-width="auto" data-live-search="true" data-selected-text-format="count > 2">
+                @foreach (ListenerType lt in GetListenerTypes())
+                {
+                    <option value="@lt.Id">@lt.Name</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.CompatibleListenerTypes" /></div>
+        </div>
+        @if (ImplantTemplate.Language == ImplantLanguage.CSharp)
+        {
+            <div class="form-group col-md-3">
+                <label for="CompatibleDotNetVersions">CompatibleDotNetVersions</label><br />
+                <select id="CompatibleDotNetVersions" name="CompatibleDotNetVersions" @onchange="OnChangeCompatibleDotNetVersions" class="selectpicker show-menu-arrow" multiple data-dropup-auto="false" data-width="auto" data-live-search="true" data-selected-text-format="count > 2">
+                    @foreach (var n in Enum.GetNames(typeof(Common.DotNetVersion)))
+                    {
+                        <option value="@(((Enum)typeof(Common.DotNetVersion).GetField(n).GetValue(null)).ToString("d"))">@n</option>
+                    }
+                </select>
+                <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.CompatibleDotNetVersions" /></div>
+            </div>
+        }
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label for="ReferenceSourceLibraries">ReferenceSourceLibraries</label><br />
+            <select id="ReferenceSourceLibraries" name="ReferenceSourceLibraries" @onchange="OnChangeReferenceSourceLibraries" class="selectpicker show-menu-arrow" multiple data-dropup-auto="false" data-width="auto" data-live-search="true" data-selected-text-format="count > 2">
+                @foreach (ReferenceSourceLibrary library in GetReferenceSourceLibraries())
+                {
+                    <option value="@library.Id">@library.Name</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.ReferenceSourceLibraries" /></div>
+        </div>
+        <div class="form-group col-md-3">
+            <label for="ReferenceAssemblies">ReferenceAssemblies</label><br />
+            <select id="ReferenceAssemblies" name="ReferenceAssemblies" @onchange="OnChangeReferenceAssemblies" class="selectpicker show-menu-arrow" multiple data-dropup-auto="false" data-width="auto" data-live-search="true" data-selected-text-format="count > 2">
+                @foreach (ReferenceAssembly assembly in GetReferenceAssemblies())
+                {
+                    <option value="@assembly.Id">@assembly.Name (@assembly.DotNetVersion.ToString())</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.ReferenceAssemblies" /></div>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label for="EmbeddedResources">EmbeddedResources</label><br />
+            <select id="EmbeddedResources" name="EmbeddedResources" @onchange="OnChangeEmbeddedResources" class="selectpicker show-menu-arrow" multiple data-dropup-auto="false" data-width="auto" data-live-search="true" data-selected-text-format="count > 2">
+                @foreach (EmbeddedResource resource in GetEmbeddedResources())
+                {
+                    <option value="@resource.Id">@resource.Name</option>
+                }
+            </select>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.EmbeddedResources" /></div>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-12">
+            <label for="StagerCode">StagerCode</label>
+            <textarea @ref="CodeMirrorElements[0]" id="StagerCode" name="StagerCode" @bind="ImplantTemplate.StagerCode" rows="5" class="form-control code-mirror-csharp"></textarea>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.StagerCode" /></div>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-12">
+            <label for="ExecutorCode">ExecutorCode</label>
+            <textarea @ref="CodeMirrorElements[1]" id="ExecutorCode" name="ExecutorCode" @bind="ImplantTemplate.ExecutorCode" rows="5" class="form-control code-mirror-csharp"></textarea>
+            <div class="text-danger"><ValidationMessage For="() => ImplantTemplate.ExecutorCode" /></div>
+        </div>
+    </div>
+    @ChildContent
+</EditForm>
+
+@code {
+    private ImplantTemplate _ImplantTemplate;
+    [Parameter]
+    public ImplantTemplate ImplantTemplate
+    {
+        get
+        {
+            return _ImplantTemplate;
+        }
+        set
+        {
+            if (value.Id > 0)
+            {
+                _ImplantTemplate = Service.GetImplantTemplate(value.Id).WaitResult();
+                Service.DisposeContext();
+            }
+            else
+            {
+                _ImplantTemplate = value;
+            }
+        }
+    }
+
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+
+    [Parameter]
+    public EventCallback<ImplantTemplate> OnSubmit { get; set; }
+
+    [CascadingParameter]
+    public Theme Theme { get; set; }
+
+    private IList<ElementReference> CodeMirrorElements { get; set; } = GetElementReferenceList(2);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            foreach (ElementReference CodeMirrorElement in CodeMirrorElements)
+            {
+                await IJSRuntime.InvokeAsync<string>("InitializeCodeMirror", CodeMirrorElement, Theme.CodeMirrorTheme.ToString());
+            }
+        }
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#Language.selectpicker", ((int)Enum.Parse(typeof(ImplantLanguage), ImplantTemplate.Language.ToString())).ToString());
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#CommType.selectpicker", ((int)Enum.Parse(typeof(CommunicationType), ImplantTemplate.CommType.ToString())).ToString() );
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#ImplantDirection.selectpicker", ((int)Enum.Parse(typeof(ImplantDirection), ImplantTemplate.ImplantDirection.ToString())).ToString());
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#CompatibleListenerTypes.selectpicker", ImplantTemplate.CompatibleListenerTypes.Select(CLT => CLT.Id.ToString()).ToArray());
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#ReferenceSourceLibraries.selectpicker", ImplantTemplate.ReferenceSourceLibraries.Select(RSL => RSL.Id.ToString()).ToArray());
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#ReferenceAssemblies.selectpicker", ImplantTemplate.ReferenceAssemblies.Select(RA => RA.Id.ToString()).ToArray());
+        await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#EmbeddedResources.selectpicker", ImplantTemplate.EmbeddedResources.Select(ER => ER.Id.ToString()).ToArray());
+        if (ImplantTemplate.Language == ImplantLanguage.CSharp)
+        {
+            await IJSRuntime.InvokeAsync<string>("InitializeSelectPicker", "#CompatibleDotNetVersions.selectpicker", ImplantTemplate.CompatibleDotNetVersions.Select(CDNV => ((int)CDNV).ToString()).ToArray());
+        }
+    }
+
+    private static IList<ElementReference> GetElementReferenceList(int size)
+    {
+        IList<ElementReference> references = new List<ElementReference>();
+        for (int i = 0; i < size; i++)
+        {
+            references.Add(new ElementReference());
+        }
+        return references;
+    }
+
+    private IEnumerable<ListenerType> GetListenerTypes()
+    {
+        var lt =  Service.GetListenerTypes().WaitResult();
+        Service.DisposeContext();
+        return lt;
+    }
+
+    private IEnumerable<ReferenceSourceLibrary> GetReferenceSourceLibraries()
+    {
+        var rsl = Service.GetReferenceSourceLibraries().WaitResult();
+        Service.DisposeContext();
+        return rsl;
+    }
+
+    private IEnumerable<ReferenceAssembly> GetReferenceAssemblies()
+    {
+        var ra = Service.GetReferenceAssemblies().WaitResult();
+        Service.DisposeContext();
+        return ra;
+    }
+
+    private IEnumerable<EmbeddedResource> GetEmbeddedResources()
+    {
+        var er = Service.GetEmbeddedResources().WaitResult();
+        Service.DisposeContext();
+        return er;
+    }
+
+    private async Task OnChangeCompatibleListenerTypes()
+    {
+        string[] lt = await IJSRuntime.InvokeAsync<string[]>("GetValue", new object[] { "#CompatibleListenerTypes" });
+        IEnumerable<int> ids = lt.Where(id => int.TryParse(id, out _)).Select(sid => int.Parse(sid));
+        this.ImplantTemplate.CompatibleListenerTypes = ids.Select(id => Service.GetListenerType(id).WaitResult()).ToList();
+        Service.DisposeContext();
+    }
+
+    private async Task OnChangeCompatibleDotNetVersions()
+    {
+        string[] ids = await IJSRuntime.InvokeAsync<string[]>("GetValue", new object[] { "#CompatibleDotNetVersions" });
+        this.ImplantTemplate.CompatibleDotNetVersions = ids.Where(id => Enum.TryParse<Common.DotNetVersion>(id, out _)).Select(id => Enum.Parse<Common.DotNetVersion>(id)).ToList();
+    }
+
+    private async Task OnChangeReferenceSourceLibraries()
+    {
+        string[] rsls = await IJSRuntime.InvokeAsync<string[]>("GetValue", new object[] { "#ReferenceSourceLibraries" });
+        IEnumerable<int> ids = rsls.Where(id => int.TryParse(id, out _)).Select(sid => int.Parse(sid));
+        this.ImplantTemplate.ReferenceSourceLibraries = ids.Select(id => Service.GetReferenceSourceLibrary(id).WaitResult()).ToList();
+        Service.DisposeContext();
+    }
+
+    private async Task OnChangeReferenceAssemblies()
+    {
+        string[] ras = await IJSRuntime.InvokeAsync<string[]>("GetValue", new object[] { "#ReferenceAssemblies" });
+        IEnumerable<int> ids = ras.Where(id => int.TryParse(id, out _)).Select(sid => int.Parse(sid));
+        this.ImplantTemplate.ReferenceAssemblies = ids.Select(id => Service.GetReferenceAssembly(id).WaitResult()).ToList();
+        Service.DisposeContext();
+    }
+
+    private async Task OnChangeEmbeddedResources()
+    {
+        string[] ers = await IJSRuntime.InvokeAsync<string[]>("GetValue", new object[] { "#EmbeddedResources" });
+        IEnumerable<int> ids = ers.Where(id => int.TryParse(id, out _)).Select(sid => int.Parse(sid));
+        this.ImplantTemplate.EmbeddedResources = ids.Select(id => Service.GetEmbeddedResource(id).WaitResult()).ToList();
+        Service.DisposeContext();
+    }
+}

@@ -14,14 +14,13 @@ namespace Covenant.Models.Launchers
     public class PowerShellLauncher : Launcher
     {
         public string ParameterString { get; set; } = "-Sta -Nop -Window Hidden";
-        public string PowerShellCode { get; set; }
-        public string EncodedLauncherString { get; set; }
+        public string PowerShellCode { get; set; } = "";
+        public string EncodedLauncherString { get; set; } = "";
 
         public PowerShellLauncher()
         {
             this.Type = LauncherType.PowerShell;
             this.Description = "Uses powershell.exe to launch a Grunt using [System.Reflection.Assembly]::Load()";
-            this.Name = "PowerShell";
             this.OutputKind = OutputKind.WindowsApplication;
             this.CompressStager = true;
         }
@@ -31,7 +30,7 @@ namespace Covenant.Models.Launchers
             this.ParameterString = parameterString;
         }
 
-        public override string GetLauncher(string StagerCode, byte[] StagerAssembly, Grunt grunt, ImplantTemplate template)
+        public override string GetLauncherString(string StagerCode, byte[] StagerAssembly, Grunt grunt, ImplantTemplate template)
         {
             this.StagerCode = StagerCode;
             this.Base64ILByteString = Convert.ToBase64String(StagerAssembly);
@@ -54,7 +53,7 @@ namespace Covenant.Models.Launchers
             return this.LauncherString;
         }
 
-        public override string GetHostedLauncher(Listener listener, HostedFile hostedFile)
+        public override string GetHostedLauncherString(Listener listener, HostedFile hostedFile)
         {
             HttpListener httpListener = (HttpListener)listener;
             if (httpListener != null)

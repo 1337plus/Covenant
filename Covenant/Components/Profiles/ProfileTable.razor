@@ -1,0 +1,135 @@
+﻿@inherits OwningComponentBase<ICovenantService>
+
+@using System.Collections.Generic
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Authorization
+
+@using Covenant.Core
+@using Covenant.Models.Listeners
+@using Covenant.Components.Shared
+@inject IJSRuntime IJSRuntime
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<CovenantTable TItem="Profile" Items="Profiles.ToList()" SearchRow="IsRowDisplayed"
+               IsSearchable="IsSearchable" IsSortable="IsSortable" IsPaginated="IsPaginated" PageLength="PageLength" class="table table-hover">
+    <TableHeader>
+        <SortableTableHeader TItem="Profile" TItem2="string" GetSortableProperty="(profile) => profile.Name">
+            <HeaderContent>Name</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="Profile" TItem2="string" GetSortableProperty="(profile) => profile.Description">
+            <HeaderContent>Description</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="Profile" TItem2="ProfileType" GetSortableProperty="(profile) => profile.Type">
+            <HeaderContent>Type</HeaderContent>
+        </SortableTableHeader>
+        <th></th>
+    </TableHeader>
+    <TableRow Context="profile">
+        <tr>
+            <td>
+                @if (IsAdmin())
+                {
+                    <a href="/profile/edit/@profile.Id">
+                        @profile.Name
+                    </a>
+                }
+                else
+                {
+                    @profile.Name
+                }
+            </td>
+            <td>@profile.Description</td>
+            <td>@profile.Type</td>
+            <td>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle pt-0 pb-0 mt-n2"
+                            type="button" id="dropdownActionProfile" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Action
+                    </button>
+                    <div class="dropdown-menu" aria-labelledby="dropdownActionProfile">
+                        <a class="dropdown-item" type="button" @onclick="(e => OnExportProfile(profile))">
+                            <span class="fe fe-share"></span>
+                            Export
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" type="button" @onclick="(e => OnDeleteProfile(profile))">
+                            <span class="fe fe-x"></span>
+                            Delete
+                        </a>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </TableRow>
+</CovenantTable>
+
+@code {
+    [Parameter]
+    public IEnumerable<Profile> Profiles { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnError { get; set; }
+
+    [Parameter]
+    public bool IsSearchable { get; set; } = false;
+
+    [Parameter]
+    public bool IsSortable { get; set; } = true;
+
+    [Parameter]
+    public bool IsPaginated { get; set; } = true;
+
+    [Parameter]
+    public int PageLength { get; set; } = 25;
+
+    private string ToString(List<string> list)
+    {
+        return string.Join(",", list);
+    }
+
+    private bool IsAdmin()
+    {
+        return AuthenticationStateProvider
+            .GetAuthenticationStateAsync()
+            .WaitResult().User
+            .IsInRole("Administrator");
+    }
+
+    private bool IsRowDisplayed(Profile profile, string SearchTerm)
+    {
+        return SearchTerm == string.Empty ||
+            profile.Name.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            profile.Description.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            profile.Type.ToString().Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private async Task OnExportProfile(Profile profile)
+    {
+        try
+        {
+            await IJSRuntime.InvokeAsync<string>(
+                "DownloadFile",
+                profile.Name + ".yaml",
+                Common.ContentTypeMappings[".yaml"],
+                Convert.ToBase64String(Common.CovenantEncoding.GetBytes(new List<Profile> { profile }.ToYaml()))
+            );
+        }
+        catch (Exception e) when (e is ControllerNotFoundException || e is ControllerBadRequestException || e is ControllerUnauthorizedException)
+        {
+            await this.OnError.InvokeAsync(e.Message);
+        }
+    }
+
+    private async Task OnDeleteProfile(Profile profile)
+    {
+        try
+        {
+            await Service.DeleteProfile(profile.Id);
+            Service.DisposeContext();
+        }
+        catch (Exception e) when (e is ControllerNotFoundException || e is ControllerBadRequestException || e is ControllerUnauthorizedException)
+        {
+            await this.OnError.InvokeAsync(e.Message);
+        }
+    }
+}

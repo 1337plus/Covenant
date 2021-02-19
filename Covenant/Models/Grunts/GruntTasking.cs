@@ -11,10 +11,12 @@ using Newtonsoft.Json;
 
 using Covenant.Core;
 using Covenant.Models.Covenant;
+using NLog;
+using System.Threading.Tasks;
 
 namespace Covenant.Models.Grunts
 {
-    public class CommandOutput
+    public class CommandOutput : ILoggable
     {
         [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
@@ -23,10 +25,14 @@ namespace Covenant.Models.Grunts
 
         [Required]
         public int GruntCommandId { get; set; }
+        [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
         public GruntCommand GruntCommand { get; set; }
+
+        // GruntTask|Action|ID|Name|Author|Aliases|Description|TaskingType|UnsafeCompile
+        public string ToLog(LogAction action) => $"CommandOutput|{action}|{this.Id}|{this.GruntCommandId}|{this.Output}";
     }
 
-    public class GruntCommand
+    public class GruntCommand : ILoggable
     {
         [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
@@ -34,7 +40,7 @@ namespace Covenant.Models.Grunts
         public string Command { get; set; }
         [Required]
         public DateTime CommandTime { get; set; } = DateTime.MinValue;
-
+        [Required]
         public int CommandOutputId { get; set; }
         public CommandOutput CommandOutput { get; set; }
 
@@ -42,11 +48,15 @@ namespace Covenant.Models.Grunts
         public string UserId { get; set; }
         public CovenantUser User { get; set; }
 
+        public int? GruntTaskingId { get; set; } = null;
+        public GruntTasking GruntTasking { get; set; }
+
         public int GruntId { get; set; }
+        [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
         public Grunt Grunt { get; set; }
 
-        public int? GruntTaskingId { get; set; }
-        public GruntTasking GruntTasking { get; set; }
+        // GruntCommand|Action|User|UserId|GruntId|Id|Command
+        public string ToLog(LogAction action) => $"GruntCommand|{action}|{this.User}|{this.UserId}|{this.GruntId}|{this.Id}|{this.Command}";
     }
 
     public enum GruntTaskingStatus
@@ -61,22 +71,18 @@ namespace Covenant.Models.Grunts
     public enum GruntTaskingType
     {
         Assembly,
-        SetOption,
+        SetDelay,
+        SetJitter,
+        SetConnectAttempts,
+        SetKillDate,
         Exit,
         Connect,
         Disconnect,
-        Jobs
+        Tasks,
+        TaskKill
     }
 
-    public class GruntTaskingMessage
-    {
-        public GruntTaskingType Type { get; set; }
-        public string Name { get; set; }
-        public string Message { get; set; }
-        public bool Token { get; set; }
-    }
-
-    public class GruntTasking
+    public class GruntTasking : ILoggable
     {
         [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
@@ -85,19 +91,22 @@ namespace Covenant.Models.Grunts
         [Required]
         public int GruntId { get; set; }
         public Grunt Grunt { get; set; }
+        [Required]
         public int GruntTaskId { get; set; }
         public GruntTask GruntTask { get; set; }
 
         public GruntTaskingType Type { get; set; } = GruntTaskingType.Assembly;
         public List<string> Parameters { get; set; } = new List<string>();
 
-        [Required]
-        public int GruntCommandId { get; set; }
-        public GruntCommand GruntCommand { get; set; }
-
         public GruntTaskingStatus Status { get; set; } = GruntTaskingStatus.Uninitialized;
-
         public DateTime TaskingTime { get; set; } = DateTime.MinValue;
         public DateTime CompletionTime { get; set; } = DateTime.MinValue;
+
+        public int GruntCommandId { get; set; }
+        [JsonIgnore, System.Text.Json.Serialization.JsonIgnore]
+        public GruntCommand GruntCommand { get; set; }
+
+        // GruntTasking|Action|Id|Name|GruntId|GruntTaskId|GruntCommand|Status
+        public string ToLog(LogAction action) => $"GruntTasking|{action}|{this.Id}|{this.Name}|{this.GruntId}|{this.GruntTaskId}|{this.Status}";
     }
 }

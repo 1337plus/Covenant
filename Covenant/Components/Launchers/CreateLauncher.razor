@@ -1,0 +1,118 @@
+﻿@page "/launcher/create/{LauncherTypeStr}"
+@attribute [Authorize(Roles = "User, Administrator")]
+@inherits OwningComponentBase<ICovenantService>
+@implements IDisposable
+
+@using Covenant.Core
+@using Covenant.Models.Launchers
+
+@using Microsoft.JSInterop
+@inject IJSRuntime IJSRuntime
+@inject INotificationService INotificationService
+@inject NavigationManager NavigationManager
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3">
+    <h1 class="h2">Create Launcher</h1>
+</div>
+
+<LauncherDetail Launcher="Launcher" OnSubmit="OnCreateLauncher">
+    @if (!string.IsNullOrEmpty(this.DisplayError))
+    {
+        <div class="text-danger">@DisplayError</div>
+    }
+</LauncherDetail>
+
+@code {
+    [Parameter]
+    public string LauncherTypeStr
+    {
+        get { return this._LauncherType.ToString(); }
+        set { Enum.TryParse<LauncherType>(value, out _LauncherType); }
+    }
+    public LauncherType _LauncherType;
+
+    public Launcher Launcher { get; set; }
+
+    private string DisplayError { get; set; }
+
+    protected override void OnInitialized()
+    {
+        switch (this._LauncherType)
+        {
+            case LauncherType.Binary:
+                this.Launcher = new BinaryLauncher();
+                break;
+            case LauncherType.ServiceBinary:
+                this.Launcher = new ServiceBinaryLauncher();
+                break;
+            case LauncherType.ShellCode:
+                this.Launcher = new ShellCodeLauncher();
+                break;
+            case LauncherType.InstallUtil:
+                this.Launcher = new InstallUtilLauncher();
+                break;
+            case LauncherType.MSBuild:
+                this.Launcher = new MSBuildLauncher();
+                break;
+            case LauncherType.Mshta:
+                this.Launcher = new MshtaLauncher();
+                break;
+            case LauncherType.PowerShell:
+                this.Launcher = new PowerShellLauncher();
+                break;
+            case LauncherType.Regsvr32:
+                this.Launcher = new Regsvr32Launcher();
+                break;
+        }
+    }
+
+    public async Task OnCreateLauncher(Launcher launcher)
+    {
+        try
+        {
+            Launcher aLauncher = null;
+            switch (launcher.Type)
+            {
+                case LauncherType.Binary:
+                    BinaryLauncher binaryLauncher = (BinaryLauncher)launcher;
+                    aLauncher = await Service.CreateBinaryLauncher(binaryLauncher);
+                    break;
+                case LauncherType.ServiceBinary:
+                    ServiceBinaryLauncher serviceBinaryLauncher = (ServiceBinaryLauncher)launcher;
+                    aLauncher = await Service.CreateServiceBinaryLauncher(serviceBinaryLauncher);
+                    break;
+                case LauncherType.ShellCode:
+                    ShellCodeLauncher shellcodeLauncher = (ShellCodeLauncher)launcher;
+                    aLauncher = await Service.CreateShellCodeLauncher(shellcodeLauncher);
+                    break;
+                case LauncherType.InstallUtil:
+                    InstallUtilLauncher installUtilLauncher = (InstallUtilLauncher)launcher;
+                    aLauncher = await Service.CreateInstallUtilLauncher(installUtilLauncher);
+                    break;
+                case LauncherType.MSBuild:
+                    MSBuildLauncher msBuildLauncher = (MSBuildLauncher)launcher;
+                    aLauncher = await Service.CreateMSBuildLauncher(msBuildLauncher);
+                    break;
+                case LauncherType.Mshta:
+                    MshtaLauncher mshtaLauncher = (MshtaLauncher)launcher;
+                    aLauncher = await Service.CreateMshtaLauncher(mshtaLauncher);
+                    break;
+                case LauncherType.PowerShell:
+                    PowerShellLauncher powershellLauncher = (PowerShellLauncher)launcher;
+                    aLauncher = await Service.CreatePowerShellLauncher(powershellLauncher);
+                    break;
+                case LauncherType.Regsvr32:
+                    Regsvr32Launcher regSvr32Launcher = (Regsvr32Launcher)launcher;
+                    aLauncher = await Service.CreateRegsvr32Launcher(regSvr32Launcher);
+                    break;
+                default:
+                    return;
+            }
+            NavigationManager.NavigateTo($"/launcher/edit/{aLauncher.Id}");
+        }
+        catch (Exception e) when (e is ControllerNotFoundException || e is ControllerBadRequestException || e is ControllerUnauthorizedException)
+        {
+            this.DisplayError = e.Message;
+        }
+    }
+}

@@ -1,0 +1,128 @@
+﻿@inherits OwningComponentBase<ICovenantService>
+
+@using Microsoft.JSInterop
+@using Covenant.Core
+@using Covenant.Models.Grunts
+@using Covenant.Components.Shared
+@inject IJSRuntime IJSRuntime
+
+<CovenantTable TItem="ImplantTemplate" Items="ImplantTemplates.ToList()" SearchRow="IsRowDisplayed"
+               IsSearchable="IsSearchable" IsSortable="IsSortable" IsPaginated="IsPaginated" PageLength="PageLength" class="table table-hover">
+    <TableHeader>
+        <SortableTableHeader TItem="ImplantTemplate" TItem2="string" GetSortableProperty="(template) => template.Name">
+            <HeaderContent>Name</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="ImplantTemplate" TItem2="ImplantLanguage" GetSortableProperty="(template) => template.Language">
+            <HeaderContent>Language</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="ImplantTemplate" TItem2="CommunicationType" GetSortableProperty="(template) => template.CommType">
+            <HeaderContent>CommType</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="ImplantTemplate" TItem2="string" GetSortableProperty="(template) => GetCompatibleDotNetVersions(template)">
+            <HeaderContent>DotNetVersions</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="ImplantTemplate" TItem2="ImplantDirection" GetSortableProperty="(template) => template.ImplantDirection">
+            <HeaderContent>ImplantDirection</HeaderContent>
+        </SortableTableHeader>
+        <SortableTableHeader TItem="ImplantTemplate" TItem2="string" GetSortableProperty="(template) => template.Description">
+            <HeaderContent>Description</HeaderContent>
+        </SortableTableHeader>
+        <th></th>
+    </TableHeader>
+    <TableRow Context="template">
+        <tr>
+            <td>
+                <a href="/template/edit/@template.Id">
+                    @template.Name
+                </a>
+            </td>
+            <td>@template.Language</td>
+            <td>@template.CommType</td>
+            <td>@GetCompatibleDotNetVersions(template)</td>
+            <td>@template.ImplantDirection</td>
+            <td>@template.Description</td>
+            <td>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle pt-0 pb-0 mt-n2"
+                            type="button" id="dropdownActionTemplate" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                        Action
+                    </button>
+                    <div class="dropdown-menu" aria-labelledby="dropdownActionTemplate">
+                        <a class="dropdown-item" type="button" @onclick="(e => OnExportTemplate(template))">
+                            <span class="fe fe-share"></span>
+                            Export
+                        </a>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item text-danger" type="button" @onclick="(e => OnDeleteTemplate(template))">
+                            <span class="fe fe-x"></span>
+                            Delete
+                        </a>
+                    </div>
+                </div>
+            </td>
+        </tr>
+    </TableRow>
+</CovenantTable>
+
+@code {
+    [Parameter]
+    public IEnumerable<ImplantTemplate> ImplantTemplates { get; set; }
+
+    [Parameter]
+    public bool IsSearchable { get; set; } = false;
+
+    [Parameter]
+    public bool IsSortable { get; set; } = true;
+
+    [Parameter]
+    public bool IsPaginated { get; set; } = false;
+
+    [Parameter]
+    public int PageLength { get; set; } = 25;
+
+    private string GetCompatibleDotNetVersions(ImplantTemplate template)
+    {
+        return string.Join(", ", template.CompatibleDotNetVersions.Select(DN => DN.ToString()));
+    }
+
+    private bool IsRowDisplayed(ImplantTemplate template, string SearchTerm)
+    {
+        return SearchTerm == string.Empty ||
+            template.Name.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            template.Language.ToString().Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            template.CommType.ToString().Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            GetCompatibleDotNetVersions(template).Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            template.ImplantDirection.ToString().Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase) ||
+            template.Description.Contains(SearchTerm, StringComparison.CurrentCultureIgnoreCase);
+    }
+
+    private async Task OnExportTemplate(ImplantTemplate template)
+    {
+        try
+        {
+            await IJSRuntime.InvokeAsync<string>(
+                "DownloadFile",
+                template.Name + ".yaml",
+                Common.ContentTypeMappings[".yaml"],
+                Convert.ToBase64String(Common.CovenantEncoding.GetBytes(new List<ImplantTemplate> { template }.ToYaml()))
+            );
+        }
+        catch (Exception e) when (e is ControllerNotFoundException || e is ControllerBadRequestException || e is ControllerUnauthorizedException)
+        {
+            // return RedirectToAction(nameof(Interact), new { id = grunt.Id });
+        }
+    }
+
+    private async Task OnDeleteTemplate(ImplantTemplate template)
+    {
+        try
+        {
+            await Service.DeleteImplantTemplate(template.Id);
+            Service.DisposeContext();
+        }
+        catch (Exception e) when (e is ControllerNotFoundException || e is ControllerBadRequestException || e is ControllerUnauthorizedException)
+        {
+            // return RedirectToAction(nameof(Interact), new { id = grunt.Id });
+        }
+    }
+}

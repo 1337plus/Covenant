@@ -35,9 +35,8 @@ namespace Covenant.Models.Grunts
         System
     }
 
-    public class Grunt
+    public class Grunt : ILoggable
     {
-        // Information to uniquely identify this Grunt
         [Key, DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
         [Required]
@@ -78,7 +77,9 @@ namespace Covenant.Models.Grunts
 
         // Attributes of the remote Grunt
         [Required]
-        public Common.DotNetVersion DotNetFrameworkVersion { get; set; } = Common.DotNetVersion.Net35;
+        public Common.DotNetVersion DotNetVersion { get; set; } = Common.DotNetVersion.Net35;
+        [Required]
+        public Compiler.RuntimeIdentifier RuntimeIdentifier { get; set; } = Compiler.RuntimeIdentifier.win_x64;
         [Required]
         public GruntStatus Status { get; set; } = GruntStatus.Uninitialized;
         [Required]
@@ -103,7 +104,8 @@ namespace Covenant.Models.Grunts
 
         public string PowerShellImport { get; set; } = "";
         public List<GruntCommand> GruntCommands { get; set; } = new List<GruntCommand>();
-
+       
+        
         public void AddChild(Grunt grunt)
         {
             if (!string.IsNullOrWhiteSpace(grunt.GUID))
@@ -116,5 +118,8 @@ namespace Covenant.Models.Grunts
         {
             return this.Children.Remove(grunt.GUID);
         }
+
+        // Grunt|Action|ID|Name|Hostname|Integrity|IPAddress|UserDomainName
+        public string ToLog(LogAction action) => $"Grunt|{action}|{this.Id}|{this.Name}|{this.Hostname}|{this.Integrity}|{this.IPAddress}|{this.UserDomainName}";
     }
 }
